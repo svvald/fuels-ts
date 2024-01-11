@@ -23,6 +23,7 @@ import type {
   GqlGasCosts,
   GqlGetBlocksQueryVariables,
   GqlPeerInfo,
+  GqlReceipt,
 } from './__generated__/operations';
 import type { RetryOptions } from './call-retrier';
 import { retrier } from './call-retrier';
@@ -42,6 +43,7 @@ import type {
 import { transactionRequestify, ScriptTransactionRequest } from './transaction-request';
 import type { TransactionResultReceipt } from './transaction-response';
 import { TransactionResponse } from './transaction-response';
+import type { GraphqlTransactionStatus } from './transaction-summary';
 import { processGqlReceipt } from './transaction-summary/receipt';
 import {
   calculatePriceWithFactor,
@@ -607,15 +609,28 @@ export default class Provider {
 
     if (awaitExecution) {
       const subscription = this.operations.submitAndAwait({ encodedTransaction });
+      let receipts: GqlReceipt[] = [];
+      let status: GraphqlTransactionStatus;
       for await (const { submitAndAwait } of subscription) {
+        status = submitAndAwait;
+        if (submitAndAwait.type === 'SuccessStatus' || submitAndAwait.type === 'FailureStatus') {
+          receipts = submitAndAwait.receipts;
+        }
+
         if (submitAndAwait.type !== 'SubmittedStatus') {
           break;
         }
       }
 
       const transactionId = transactionRequest.getTransactionId(this.getChainId());
-      const response = new TransactionResponse(transactionId, this);
-      await response.fetch();
+      const response = new TransactionResponse(
+        transactionId,
+        this,
+        transactionRequest,
+        receipts,
+        status
+      );
+      // await response.fetch();
       return response;
     }
 

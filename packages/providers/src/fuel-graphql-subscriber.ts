@@ -27,6 +27,7 @@ export class FuelGraphqlSubscriber implements AsyncIterator<unknown> {
       return undefined;
     }
 
+    console.log(text);
     const { data, errors } = JSON.parse(text.split('data:')[1]);
 
     if (Array.isArray(errors)) {

@@ -16,11 +16,16 @@ import type {
   Transaction,
   ReceiptMint,
   ReceiptBurn,
+  TransactionMint,
+  TransactionCreate,
+  TransactionScript,
 } from '@fuel-ts/transactions';
 import { TransactionCoder } from '@fuel-ts/transactions';
 import { getBytesCopy } from 'ethers';
 
+import type { GqlReceipt } from '../__generated__/operations';
 import type Provider from '../provider';
+import type { TransactionRequest } from '../transaction-request';
 import { assembleTransactionSummary } from '../transaction-summary/assemble-transaction-summary';
 import { processGqlReceipt } from '../transaction-summary/receipt';
 import type {
@@ -28,6 +33,8 @@ import type {
   FailureStatus,
   GqlTransaction,
   AbiMap,
+  TransactionStatus,
+  GraphqlTransactionStatus,
 } from '../transaction-summary/types';
 
 /** @hidden */
@@ -95,7 +102,13 @@ export class TransactionResponse {
    * @param id - The transaction ID.
    * @param provider - The provider.
    */
-  constructor(id: string, provider: Provider) {
+  constructor(
+    id: string,
+    provider: Provider,
+    private request?: TransactionRequest,
+    private receipts?: GqlReceipt[],
+    private status?: GraphqlTransactionStatus
+  ) {
     this.id = id;
     this.provider = provider;
   }
@@ -163,20 +176,24 @@ export class TransactionResponse {
    * @param contractsAbiMap - The contracts ABI map.
    * @returns
    */
+  // eslint-disable-next-line @typescript-eslint/require-await
   async getTransactionSummary<TTransactionType = void>(
     contractsAbiMap?: AbiMap
   ): Promise<TransactionSummary<TTransactionType>> {
-    let transaction = this.gqlTransaction;
+    // let transaction = this.gqlTransaction;
 
-    if (!transaction) {
-      transaction = await this.fetch();
-    }
+    // if (!transaction) {
+    //   transaction = await this.fetch();
+    // }
 
-    const decodedTransaction = this.decodeTransaction<TTransactionType>(
-      transaction
-    ) as Transaction<TTransactionType>;
+    // const decodedTransaction = this.decodeTransaction<TTransactionType>(
+    //   transaction
+    // ) as Transaction<TTransactionType>;
 
-    const receipts = transaction.receipts?.map(processGqlReceipt) || [];
+    const decodedTransaction = this.request!.toTransaction();
+
+    const receipts = this.receipts?.map(processGqlReceipt) ?? [];
+    //  transaction.receipts?.map(processGqlReceipt) || [];
 
     const { gasPerByte, gasPriceFactor, gasCosts } = this.provider.getGasConfig();
     const maxInputs = this.provider.getChain().consensusParameters.maxInputs;
@@ -185,8 +202,8 @@ export class TransactionResponse {
       id: this.id,
       receipts,
       transaction: decodedTransaction,
-      transactionBytes: getBytesCopy(transaction.rawPayload),
-      gqlTransactionStatus: transaction.status,
+      transactionBytes: getBytesCopy(this.request!.toTransactionBytes()),
+      gqlTransactionStatus: this.status,
       gasPerByte,
       gasPriceFactor,
       abiMap: contractsAbiMap,
