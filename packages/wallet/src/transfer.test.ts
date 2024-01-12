@@ -160,6 +160,7 @@ describe('Wallet', () => {
     const tx = await sender.withdrawToBaseLayer(recipient, 10, { gasPrice, gasLimit: 10_000 });
     const result = await tx.waitForResult();
 
+    console.log(result.receipts);
     const messageOutReceipt = <TransactionResultMessageOutReceipt>result.receipts[0];
 
     // The sender is the TX ID on the spec it says it should be the sender address

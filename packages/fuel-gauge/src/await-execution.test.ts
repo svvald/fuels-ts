@@ -36,8 +36,8 @@ describe('await-execution', () => {
     );
 
     const response = await nodeProvider.sendTransaction(transfer, { awaitExecution: true });
-
-    expect(response.gqlTransaction?.status?.type).toBe('SuccessStatus');
+    const summary = await response.getTransactionSummary();
+    expect(summary.status).toBe('success');
 
     cleanup();
   });

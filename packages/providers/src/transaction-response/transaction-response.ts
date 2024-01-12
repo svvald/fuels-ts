@@ -187,7 +187,7 @@ export class TransactionResponse {
       ) as Transaction<TTransactionType>;
     }
 
-    const receipts = this.receipts?.map(processGqlReceipt) ?? [];
+    const receipts = (this.receipts ?? this.gqlTransaction?.receipts)?.map(processGqlReceipt) ?? [];
     //  transaction.receipts?.map(processGqlReceipt) || [];
 
     const { gasPerByte, gasPriceFactor, gasCosts } = this.provider.getGasConfig();
