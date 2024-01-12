@@ -24,6 +24,7 @@ import type {
   GqlGetBlocksQueryVariables,
   GqlPeerInfo,
   GqlReceipt,
+  GqlStatusChangeSubscription,
 } from './__generated__/operations';
 import type { RetryOptions } from './call-retrier';
 import { retrier } from './call-retrier';
@@ -610,7 +611,8 @@ export default class Provider {
     if (awaitExecution) {
       const subscription = this.operations.submitAndAwait({ encodedTransaction });
       let receipts: GqlReceipt[] = [];
-      let status: GraphqlTransactionStatus;
+      // @ts-expect-error asd
+      let status: GqlStatusChangeSubscription['statusChange'] = {};
       for await (const { submitAndAwait } of subscription) {
         status = submitAndAwait;
         if (submitAndAwait.type === 'SuccessStatus' || submitAndAwait.type === 'FailureStatus') {

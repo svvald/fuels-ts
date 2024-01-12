@@ -22,12 +22,19 @@ export class FuelGraphqlSubscriber implements AsyncIterator<unknown> {
     }
 
     const text = this.textDecoder.decode(bytes);
+
+    // https://github.com/FuelLabs/fuel-core/blob/e1e631902f762081d2124d9c457ddfe13ac366dc/crates/fuel-core/src/graphql_api/service.rs#L247
+    if (text === 'keep-alive-text') {
+      return undefined;
+    }
+
     if (!text.startsWith('data:')) {
       // the text can sometimes be a keep-alive message
       return undefined;
     }
 
     console.log(text);
+
     const { data, errors } = JSON.parse(text.split('data:')[1]);
 
     if (Array.isArray(errors)) {
@@ -59,19 +66,59 @@ export class FuelGraphqlSubscriber implements AsyncIterator<unknown> {
     this.stream = response.body!.getReader();
   }
 
-  private async readStream(): Promise<IteratorResult<unknown, unknown>> {
+  private async readUntilFullMessage(
+    incompleteMessage?: string
+  ): Promise<IteratorResult<string, string | undefined>> {
     const { value, done } = await this.stream.read();
 
-    const parsed = FuelGraphqlSubscriber.parseBytesStream(value);
-
-    if (parsed === undefined && !done) {
-      // this is in the case of e.g. a keep-alive message
-      // we recursively wait for the next message until it's a proper gql response
-      // or the stream is done (e.g. closed by the server)
-      return this.readStream();
+    if (done) {
+      return { value, done };
     }
 
-    return { value: parsed, done };
+    const message = (incompleteMessage ?? '') + FuelGraphqlSubscriber.textDecoder.decode(value);
+
+    // https://github.com/FuelLabs/fuel-core/blob/e1e631902f762081d2124d9c457ddfe13ac366dc/crates/fuel-core/src/graphql_api/service.rs#L247
+    if (message === 'keep-alive-text') {
+      return { value: message, done };
+    }
+
+    if (message.endsWith('\n\n')) {
+      return { value: message, done };
+    }
+
+    return this.readUntilFullMessage(message);
+  }
+
+  private async readStream(): Promise<IteratorResult<unknown, unknown>> {
+    const { value, done } = await this.readUntilFullMessage();
+
+    if (value === undefined) {
+      return { value: undefined, done };
+    }
+
+    const { data, errors } = JSON.parse(value.split('data:')[1]);
+
+    if (Array.isArray(errors)) {
+      throw new FuelError(
+        FuelError.CODES.INVALID_REQUEST,
+        errors.map((err) => err.message).join('\n\n')
+      );
+    }
+
+    return { value: data, done };
+
+    // return data as Record<string, unknown>;
+
+    // const parsed = FuelGraphqlSubscriber.parseBytesStream(value);
+
+    // if (parsed === undefined && !done) {
+    //   // this is in the case of e.g. a keep-alive message
+    //   // we recursively wait for the next message until it's a proper gql response
+    //   // or the stream is done (e.g. closed by the server)
+    //   return this.readStream();
+    // }
+
+    // return { value: parsed, done };
   }
 
   async next(): Promise<IteratorResult<unknown, unknown>> {
