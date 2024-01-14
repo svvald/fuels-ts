@@ -17,10 +17,10 @@ import type {
   ReceiptMint,
   ReceiptBurn,
 } from '@fuel-ts/transactions';
-import { TransactionCoder, TransactionType } from '@fuel-ts/transactions';
+import { TransactionCoder } from '@fuel-ts/transactions';
 import { getBytesCopy } from 'ethers';
 
-import type { GqlReceipt, GqlStatusChangeSubscription } from '../__generated__/operations';
+import type { GqlSubmitAndAwaitSubscription } from '../__generated__/operations';
 import type Provider from '../provider';
 import type { TransactionRequest } from '../transaction-request';
 import { assembleTransactionSummary } from '../transaction-summary/assemble-transaction-summary';
@@ -89,7 +89,8 @@ export class TransactionResponse {
   /** Gas used on the transaction */
   gasUsed: BN = bn(0);
   /** The graphql Transaction with receipts object. */
-  gqlTransaction?: GqlTransaction;
+  private gqlTransaction?: GqlTransaction;
+  private request?: TransactionRequest;
 
   /**
    * Constructor for `TransactionResponse`.
@@ -98,14 +99,17 @@ export class TransactionResponse {
    * @param provider - The provider.
    */
   constructor(
-    id: string,
+    idOrRequest: string | TransactionRequest,
     provider: Provider,
-    private request?: TransactionRequest,
-    private receipts?: GqlReceipt[],
-    private status?: GqlStatusChangeSubscription['statusChange']
+    private status?: GqlSubmitAndAwaitSubscription['submitAndAwait']
   ) {
-    this.id = id;
+    this.id =
+      typeof idOrRequest === 'string'
+        ? idOrRequest
+        : idOrRequest.getTransactionId(provider.getChainId());
+
     this.provider = provider;
+    this.request = typeof idOrRequest !== 'string' ? idOrRequest : undefined;
   }
 
   /**
@@ -164,6 +168,48 @@ export class TransactionResponse {
     )?.[0] as Transaction<TTransactionType>;
   }
 
+  private getReceipts() {
+    switch (this.status?.type) {
+      case 'FailureStatus':
+      case 'SuccessStatus':
+        return this.status.receipts;
+      case 'SqueezedOutStatus':
+      case 'SubmittedStatus':
+        return [];
+        break;
+      case undefined:
+      default:
+        return this.gqlTransaction?.receipts ?? [];
+    }
+  }
+
+  private async getTransaction<TTransactionType = void>(): Promise<Transaction<TTransactionType>> {
+    if (this.request) {
+      return this.request.toTransaction() as Transaction<TTransactionType>;
+    }
+
+    if (!this.gqlTransaction) {
+      await this.fetch();
+    }
+
+    return this.decodeTransaction(
+      this.gqlTransaction as GqlTransaction
+    ) as Transaction<TTransactionType>;
+  }
+
+  private async getTransactionBytes() {
+    if (this.request) {
+      return this.request.toTransactionBytes();
+    }
+
+    if (!this.gqlTransaction) {
+      await this.fetch();
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    return getBytesCopy(this.gqlTransaction!.rawPayload);
+  }
+
   /**
    * Retrieves the TransactionSummary. If the `gqlTransaction` is not set, it will
    * fetch it from the provider
@@ -174,32 +220,17 @@ export class TransactionResponse {
   async getTransactionSummary<TTransactionType = void>(
     contractsAbiMap?: AbiMap
   ): Promise<TransactionSummary<TTransactionType>> {
-    let decodedTransaction: Transaction<TTransactionType>;
-    if (this.request) {
-      decodedTransaction = this.request.toTransaction() as Transaction<TTransactionType>;
-    } else {
-      let transaction = this.gqlTransaction;
-      if (!transaction) {
-        transaction = await this.fetch();
-      }
-      decodedTransaction = this.decodeTransaction<TTransactionType>(
-        transaction
-      ) as Transaction<TTransactionType>;
-    }
-
-    const receipts = (this.receipts ?? this.gqlTransaction?.receipts)?.map(processGqlReceipt) ?? [];
-    //  transaction.receipts?.map(processGqlReceipt) || [];
+    const decodedTransaction = await this.getTransaction<TTransactionType>();
 
     const { gasPerByte, gasPriceFactor, gasCosts } = this.provider.getGasConfig();
     const maxInputs = this.provider.getChain().consensusParameters.maxInputs;
+    const transactionBytes = await this.getTransactionBytes();
 
     const transactionSummary = assembleTransactionSummary<TTransactionType>({
       id: this.id,
-      receipts,
+      receipts: this.getReceipts().map(processGqlReceipt),
       transaction: decodedTransaction,
-      transactionBytes: getBytesCopy(
-        this.request?.toTransactionBytes() ?? this.gqlTransaction!.rawPayload
-      ),
+      transactionBytes,
       gqlTransactionStatus: this.status ?? this.gqlTransaction?.status,
       gasPerByte,
       gasPriceFactor,
@@ -212,7 +243,7 @@ export class TransactionResponse {
   }
 
   private async waitForStatusChange() {
-    const status = this.gqlTransaction?.status?.type;
+    const status = this.status?.type ?? this.gqlTransaction?.status?.type;
     if (status && status !== 'SubmittedStatus') {
       return;
     }
@@ -263,7 +294,7 @@ export class TransactionResponse {
     if (result.isStatusFailure) {
       throw new FuelError(
         ErrorCode.TRANSACTION_FAILED,
-        `Transaction failed: ${(<FailureStatus>result.gqlTransaction.status).reason}`
+        `Transaction failed: ${(<FailureStatus>this.status).reason}`
       );
     }
 
