@@ -14,7 +14,6 @@ import { checkFuelCoreVersionCompatibility } from '@fuel-ts/versions';
 import type { BytesLike } from 'ethers';
 import { getBytesCopy, hexlify, Network } from 'ethers';
 import type { DocumentNode } from 'graphql';
-import { GraphQLClient } from 'graphql-request';
 import { clone } from 'ramda';
 
 import { getSdk as getOperationsSdk } from './__generated__/operations';
@@ -29,7 +28,7 @@ import { retrier } from './call-retrier';
 import type { Coin } from './coin';
 import type { CoinQuantity, CoinQuantityLike } from './coin-quantity';
 import { coinQuantityfy } from './coin-quantity';
-import { fuelGraphQLSubscriber } from './fuel-graphql-subscriber';
+import { fuelGraphQLRequest } from './fuel-graphql-request';
 import { MemoryCache } from './memory-cache';
 import type { Message, MessageCoin, MessageProof, MessageStatus } from './message';
 import type { ExcludeResourcesOption, Resource } from './resource';
@@ -433,28 +432,14 @@ export default class Provider {
    */
   private createOperations() {
     const fetchFn = Provider.getFetchFn(this.options);
-    const gqlClient = new GraphQLClient(this.url, {
-      fetch: (url: string, requestInit: FetchRequestOptions) =>
-        fetchFn(url, requestInit, this.options),
-    });
-
-    const executeQuery = (query: DocumentNode, vars: Record<string, unknown>) => {
-      const opDefinition = query.definitions.find((x) => x.kind === 'OperationDefinition') as {
-        operation: string;
-      };
-      const isSubscription = opDefinition?.operation === 'subscription';
-
-      if (isSubscription) {
-        return fuelGraphQLSubscriber({
-          url: this.url,
-          query,
-          fetchFn: (url, requestInit) =>
-            fetchFn(url as string, requestInit as FetchRequestOptions, this.options),
-          variables: vars,
-        });
-      }
-      return gqlClient.request(query, vars);
-    };
+    const executeQuery = (operation: DocumentNode, vars: Record<string, unknown>) =>
+      fuelGraphQLRequest(
+        (url, requestInit) =>
+          fetchFn(url as string, requestInit as FetchRequestOptions, this.options),
+        this.url,
+        operation,
+        vars
+      );
 
     // @ts-expect-error This is due to this function being generic. Its type is specified when calling a specific operation via provider.operations.xyz.
     return getOperationsSdk(executeQuery);
