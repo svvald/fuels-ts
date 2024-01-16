@@ -2,7 +2,7 @@ import { FuelError } from '@fuel-ts/errors';
 import type { DocumentNode } from 'graphql';
 import { print } from 'graphql';
 
-export type FuelGraphQLSubscriberOptions = {
+type FuelGraphQLSubscriberOptions = {
   url: string;
   query: DocumentNode;
   variables?: Record<string, unknown>;
@@ -10,8 +10,10 @@ export type FuelGraphQLSubscriberOptions = {
   abortController?: AbortController;
 };
 
-export class FuelGraphqlSubscriber implements AsyncIterator<unknown> {
-  private stream!: ReadableStreamDefaultReader<Uint8Array>;
+class FuelSubscriptionStream implements TransformStream {
+  readable: ReadableStream<FuelError | Record<string, unknown>>;
+  writable: WritableStream<Uint8Array>;
+  private readableStreamController!: ReadableStreamController<FuelError | Record<string, unknown>>;
   private static textDecoder = new TextDecoder();
 
   private static parseBytesStream(
@@ -131,19 +133,9 @@ export class FuelGraphqlSubscriber implements AsyncIterator<unknown> {
     if (value instanceof FuelError) {
       throw value;
     }
-
-    return { value, done };
-  }
-
-  /**
-   * Gets called when `break` is called in a `for-await-of` loop.
-   */
-  async return(): Promise<IteratorResult<unknown, undefined>> {
-    await this.stream.cancel();
-    return { done: true, value: undefined };
-  }
-
-  [Symbol.asyncIterator](): AsyncIterator<unknown, unknown, undefined> {
-    return this;
+    yield value;
+    if (done) {
+      break;
+    }
   }
 }
