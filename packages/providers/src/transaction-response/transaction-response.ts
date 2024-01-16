@@ -73,11 +73,6 @@ export type TransactionResultReceipt =
   | TransactionResultMintReceipt
   | TransactionResultBurnReceipt;
 
-/** @hidden */
-export type TransactionResult<TTransactionType = void> = TransactionSummary<TTransactionType> & {
-  gqlTransaction: GqlTransaction;
-};
-
 /**
  * Represents a response for a transaction.
  */
@@ -268,17 +263,10 @@ export class TransactionResponse {
    */
   async waitForResult<TTransactionType = void>(
     contractsAbiMap?: AbiMap
-  ): Promise<TransactionResult<TTransactionType>> {
+  ): Promise<TransactionSummary<TTransactionType>> {
     await this.waitForStatusChange();
 
-    const transactionSummary = await this.getTransactionSummary<TTransactionType>(contractsAbiMap);
-
-    const transactionResult: TransactionResult<TTransactionType> = {
-      gqlTransaction: this.gqlTransaction as GqlTransaction,
-      ...transactionSummary,
-    };
-
-    return transactionResult;
+    return this.getTransactionSummary<TTransactionType>(contractsAbiMap);
   }
 
   /**
@@ -288,7 +276,7 @@ export class TransactionResponse {
    */
   async wait<TTransactionType = void>(
     contractsAbiMap?: AbiMap
-  ): Promise<TransactionResult<TTransactionType>> {
+  ): Promise<TransactionSummary<TTransactionType>> {
     const result = await this.waitForResult<TTransactionType>(contractsAbiMap);
 
     if (result.isStatusFailure) {

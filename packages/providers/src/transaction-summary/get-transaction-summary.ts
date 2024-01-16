@@ -9,7 +9,6 @@ import type {
 } from '../__generated__/operations';
 import type Provider from '../provider';
 import type { TransactionRequest } from '../transaction-request';
-import type { TransactionResult } from '../transaction-response';
 
 import { assembleTransactionSummary } from './assemble-transaction-summary';
 import { processGqlReceipt } from './receipt';
@@ -24,7 +23,7 @@ export interface GetTransactionSummaryParams {
 
 export async function getTransactionSummary<TTransactionType = void>(
   params: GetTransactionSummaryParams
-): Promise<TransactionResult> {
+): Promise<TransactionSummary<TTransactionType>> {
   const { id, provider, abiMap } = params;
 
   const { transaction: gqlTransaction } = await provider.operations.getTransactionWithReceipts({
@@ -49,7 +48,7 @@ export async function getTransactionSummary<TTransactionType = void>(
     consensusParameters: { gasPerByte, gasPriceFactor, maxInputs, gasCosts },
   } = provider.getChain();
 
-  const transactionInfo = assembleTransactionSummary<TTransactionType>({
+  return assembleTransactionSummary<TTransactionType>({
     id: gqlTransaction.id,
     receipts,
     transaction: decodedTransaction,
@@ -61,11 +60,6 @@ export async function getTransactionSummary<TTransactionType = void>(
     maxInputs,
     gasCosts,
   });
-
-  return {
-    gqlTransaction,
-    ...transactionInfo,
-  };
 }
 
 export interface GetTransactionSummaryFromRequestParams {
@@ -88,7 +82,7 @@ export async function getTransactionSummaryFromRequest<TTransactionType = void>(
   const transaction = transactionRequest.toTransaction();
   const transactionBytes = transactionRequest.toTransactionBytes();
 
-  const transactionSummary = assembleTransactionSummary<TTransactionType>({
+  return assembleTransactionSummary<TTransactionType>({
     receipts,
     transaction,
     transactionBytes,
@@ -98,8 +92,6 @@ export async function getTransactionSummaryFromRequest<TTransactionType = void>(
     maxInputs,
     gasCosts,
   });
-
-  return transactionSummary;
 }
 
 export interface GetTransactionsSummariesParams {
@@ -109,7 +101,7 @@ export interface GetTransactionsSummariesParams {
 }
 
 export interface GetTransactionsSummariesReturns {
-  transactions: TransactionResult[];
+  transactions: TransactionSummary[];
   pageInfo: GqlPageInfo;
 }
 
@@ -136,7 +128,7 @@ export async function getTransactionsSummaries(
 
     const receipts = gqlReceipts?.map(processGqlReceipt) || [];
 
-    const transactionSummary = assembleTransactionSummary({
+    return assembleTransactionSummary({
       id,
       receipts,
       transaction: decodedTransaction,
@@ -148,13 +140,6 @@ export async function getTransactionsSummaries(
       maxInputs,
       gasCosts,
     });
-
-    const output: TransactionResult = {
-      gqlTransaction,
-      ...transactionSummary,
-    };
-
-    return output;
   });
 
   return {

@@ -7,8 +7,8 @@ import { bn } from '@fuel-ts/math';
 import type {
   CallResult,
   TransactionResponse,
-  TransactionResult,
   TransactionResultReceipt,
+  TransactionSummary,
 } from '@fuel-ts/providers';
 import { getDecodedLogs } from '@fuel-ts/providers';
 import type { ReceiptScriptResult } from '@fuel-ts/transactions';
@@ -128,7 +128,7 @@ export class FunctionInvocationResult<
 > extends InvocationResult<T> {
   readonly transactionId: string;
   readonly transactionResponse: TransactionResponse;
-  readonly transactionResult: TransactionResult<TTransactionType>;
+  readonly transactionResult: TransactionSummary<TTransactionType>;
   readonly program: AbstractProgram;
   readonly logs!: Array<any>;
 
@@ -137,23 +137,23 @@ export class FunctionInvocationResult<
    *
    * @param funcScopes - The function scopes.
    * @param transactionResponse - The transaction response.
-   * @param transactionResult - The transaction result.
+   * @param transactionSummary - The transaction result.
    * @param program - The program.
    * @param isMultiCall - Whether it's a multi-call.
    */
   constructor(
     funcScopes: InvocationScopeLike | Array<InvocationScopeLike>,
     transactionResponse: TransactionResponse,
-    transactionResult: TransactionResult<TTransactionType>,
+    transactionSummary: TransactionSummary<TTransactionType>,
     program: AbstractProgram,
     isMultiCall: boolean
   ) {
-    super(funcScopes, transactionResult, isMultiCall);
+    super(funcScopes, transactionSummary, isMultiCall);
     this.transactionResponse = transactionResponse;
-    this.transactionResult = transactionResult;
+    this.transactionResult = transactionSummary;
     this.transactionId = this.transactionResponse.id;
     this.program = program;
-    this.logs = this.getDecodedLogs(transactionResult.receipts);
+    this.logs = this.getDecodedLogs(transactionSummary.receipts);
   }
 
   /**
