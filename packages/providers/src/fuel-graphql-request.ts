@@ -26,6 +26,33 @@ class FuelGraphqlSubscriber implements AsyncIterator<unknown> {
   private stream!: ReadableStreamDefaultReader<Uint8Array>;
   private static textDecoder = new TextDecoder();
 
+  private static parseBytesStream(
+    bytes: Uint8Array | undefined
+  ): Record<string, unknown> | FuelError | undefined {
+    if (bytes === undefined) {
+      return undefined;
+    }
+
+    const text = this.textDecoder.decode(bytes);
+
+    // https://github.com/FuelLabs/fuel-core/blob/e1e631902f762081d2124d9c457ddfe13ac366dc/crates/fuel-core/src/graphql_api/service.rs#L247
+    // this is the real keep-alive message sent by the server
+    if (text === ':keep-alive-text\n\n') {
+      return undefined;
+    }
+
+    const { data, errors } = JSON.parse(text.split('data:')[1]);
+
+    if (Array.isArray(errors)) {
+      return new FuelError(
+        FuelError.CODES.INVALID_REQUEST,
+        errors.map((err) => err.message).join('\n\n')
+      );
+    }
+
+    return data as Record<string, unknown>;
+  }
+
   public constructor(
     private options: {
       url: string;
@@ -50,7 +77,10 @@ class FuelGraphqlSubscriber implements AsyncIterator<unknown> {
   private async readUntilFullMessage(
     incompleteMessage?: string
   ): Promise<IteratorResult<string, string | undefined>> {
-    const { value, done } = await this.stream.read();
+    let parsed;
+    let doneStreaming = false;
+    do {
+      const { value, done } = await this.stream.read();
 
     if (done) {
       return { value, done };
@@ -87,6 +117,19 @@ class FuelGraphqlSubscriber implements AsyncIterator<unknown> {
     }
 
     return { value: data, done };
+  private async readStream(): Promise<IteratorResult<unknown, unknown>> {
+    let parsed;
+    let doneStreaming = false;
+    do {
+      const { value, done } = await this.stream.read();
+
+      parsed = FuelGraphqlSubscriber.parseBytesStream(value);
+      doneStreaming = done;
+
+      // we do this until it's a proper gql response or the stream is done i.e. {value: undefined, done: true}
+    } while (parsed === undefined && !doneStreaming);
+
+    return { value: parsed, done: doneStreaming };
   }
 
   async next(): Promise<IteratorResult<unknown, unknown>> {
