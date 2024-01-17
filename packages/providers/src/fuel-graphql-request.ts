@@ -74,40 +74,24 @@ class FuelGraphqlSubscriber implements AsyncIterator<unknown> {
     this.stream = response.body!.getReader();
   }
 
-  private async readUntilFullMessage(
-    incompleteMessage?: string
-  ): Promise<IteratorResult<string, string | undefined>> {
-    let parsed;
-    let doneStreaming = false;
+  private async readStream(): Promise<IteratorResult<Record<string, unknown> | undefined>> {
+    let message = '';
+
     do {
       const { value, done } = await this.stream.read();
 
-    if (done) {
-      return { value, done };
-    }
+      if (done) {
+        return { value, done };
+      }
 
-    const message = (incompleteMessage ?? '') + FuelGraphqlSubscriber.textDecoder.decode(value);
+      message += FuelGraphqlSubscriber.textDecoder.decode(value);
 
-    // https://github.com/FuelLabs/fuel-core/blob/e1e631902f762081d2124d9c457ddfe13ac366dc/crates/fuel-core/src/graphql_api/service.rs#L247
-    if (message === 'keep-alive-text') {
-      return { value: message, done };
-    }
+      if (message === 'keep-alive-text\n\n') {
+        message = '';
+      }
+    } while (!message.endsWith('\n\n'));
 
-    if (message.endsWith('\n\n')) {
-      return { value: message, done };
-    }
-
-    return this.readUntilFullMessage(message);
-  }
-
-  private async readStream(): Promise<IteratorResult<unknown, unknown>> {
-    const { value, done } = await this.readUntilFullMessage();
-
-    if (value === undefined) {
-      return { value: undefined, done };
-    }
-
-    const { data, errors } = JSON.parse(value.split('data:')[1]);
+    const { data, errors } = JSON.parse(message.split('data:')[1]);
 
     if (Array.isArray(errors)) {
       throw new FuelError(
@@ -116,20 +100,7 @@ class FuelGraphqlSubscriber implements AsyncIterator<unknown> {
       );
     }
 
-    return { value: data, done };
-  private async readStream(): Promise<IteratorResult<unknown, unknown>> {
-    let parsed;
-    let doneStreaming = false;
-    do {
-      const { value, done } = await this.stream.read();
-
-      parsed = FuelGraphqlSubscriber.parseBytesStream(value);
-      doneStreaming = done;
-
-      // we do this until it's a proper gql response or the stream is done i.e. {value: undefined, done: true}
-    } while (parsed === undefined && !doneStreaming);
-
-    return { value: parsed, done: doneStreaming };
+    return { value: data, done: false };
   }
 
   async next(): Promise<IteratorResult<unknown, unknown>> {
@@ -137,12 +108,7 @@ class FuelGraphqlSubscriber implements AsyncIterator<unknown> {
       await this.setStream();
     }
 
-    const { value, done } = await this.readStream();
-    if (value instanceof FuelError) {
-      throw value;
-    }
-
-    return { value, done };
+    return this.readStream();
   }
 
   /**
