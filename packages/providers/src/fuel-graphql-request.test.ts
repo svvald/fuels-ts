@@ -79,7 +79,7 @@ describe('FuelGraphqlRequest', () => {
       start(controller) {
         const encoder = new TextEncoder();
 
-        controller.enqueue(encoder.encode(`data:${JSON.stringify({ errors })}`));
+        controller.enqueue(encoder.encode(`data:${JSON.stringify({ errors })}\n\n`));
         controller.close();
       },
     });
@@ -111,10 +111,10 @@ describe('FuelGraphqlRequest', () => {
         const encoder = new TextEncoder();
 
         controller.enqueue(
-          encoder.encode(`data:${JSON.stringify({ data: { submitAndAwait: { a: 0 } } })}`)
+          encoder.encode(`data:${JSON.stringify({ data: { submitAndAwait: { a: 0 } } })}\n\n`)
         );
         controller.enqueue(
-          encoder.encode(`data:${JSON.stringify({ data: { submitAndAwait: { a: 1 } } })}`)
+          encoder.encode(`data:${JSON.stringify({ data: { submitAndAwait: { a: 1 } } })}\n\n`)
         );
       },
       cancel() {
@@ -148,11 +148,11 @@ describe('FuelGraphqlRequest', () => {
         const encoder = new TextEncoder();
 
         controller.enqueue(
-          encoder.encode(`data:${JSON.stringify({ data: { submitAndAwait: { a: 0 } } })}`)
+          encoder.encode(`data:${JSON.stringify({ data: { submitAndAwait: { a: 0 } } })}\n\n`)
         );
         controller.enqueue(encoder.encode(':keep-alive-text\n\n'));
         controller.enqueue(
-          encoder.encode(`data:${JSON.stringify({ data: { submitAndAwait: { a: 1 } } })}`)
+          encoder.encode(`data:${JSON.stringify({ data: { submitAndAwait: { a: 1 } } })}\n\n`)
         );
         controller.close();
       },

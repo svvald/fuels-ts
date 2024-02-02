@@ -86,7 +86,7 @@ class FuelGraphqlSubscriber implements AsyncIterator<unknown> {
 
       message += FuelGraphqlSubscriber.textDecoder.decode(value);
 
-      if (message === 'keep-alive-text\n\n') {
+      if (message === ':keep-alive-text\n\n') {
         message = '';
       }
     } while (!message.endsWith('\n\n'));
