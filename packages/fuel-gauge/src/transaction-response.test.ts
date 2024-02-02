@@ -9,7 +9,6 @@ import {
   randomBytes,
   WalletUnlocked,
 } from 'fuels';
-
 /**
  * @group node
  */
@@ -87,17 +86,7 @@ describe('TransactionSummary', () => {
 
   it('should ensure waitForResult always waits for the transaction to be processed', async () => {
     const { cleanup, ip, port } = await launchNode({
-      /**
-       * This is set to so long in order to test keep-alive message handling as well.
-       * Keep-alive messages are sent every 15s.
-       * It is very important to test this because the keep-alive messages are not sent in the same format as the other messages
-       * and it is reasonable to expect subscriptions lasting more than 15 seconds.
-       * We need a proper integration test for this
-       * because if the keep-alive message changed in any way between fuel-core versions and we missed it,
-       * all our subscriptions would break.
-       * We need at least one long test to ensure that the keep-alive messages are handled correctly.
-       * */
-      args: ['--poa-interval-period', '17sec'],
+      args: ['--poa-interval-period', '750ms', '--poa-instant', 'false'],
     });
     const nodeProvider = await Provider.create(`http://${ip}:${port}/graphql`);
 
@@ -124,5 +113,5 @@ describe('TransactionSummary', () => {
     expect(response.gqlTransaction?.id).toBe(transactionId);
 
     cleanup();
-  }, 18500);
+  });
 });
