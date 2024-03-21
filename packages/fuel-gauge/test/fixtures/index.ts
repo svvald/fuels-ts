@@ -53,6 +53,7 @@ export enum FuelGaugeProjectsEnum {
   VECTOR_TYPES_CONTRACT = 'vector-types-contract',
   VECTOR_TYPES_SCRIPT = 'vector-types-script',
   VECTORS = 'vectors',
+  SRC7_METADATA_TEST = 'src7-metadata-test',
 }
 
 export const getFuelGaugeForcProject = (project: FuelGaugeProjectsEnum) =>

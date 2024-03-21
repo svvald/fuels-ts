@@ -51,4 +51,5 @@ members = [
   "vector-types-contract",
   "vector-types-script",
   "vectors",
+  "src7-metadata-test",
 ]
