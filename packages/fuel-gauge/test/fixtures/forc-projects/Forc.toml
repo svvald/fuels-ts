@@ -23,6 +23,7 @@ members = [
   "predicate-main-args-vector",
   "predicate-multi-args",
   "predicate-raw-slice",
+  "contract",
   "predicate-std-lib-string",
   "predicate-input-data",
   "predicate-triple-sig",
