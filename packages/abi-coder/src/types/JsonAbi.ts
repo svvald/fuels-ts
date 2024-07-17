@@ -8,7 +8,7 @@ export interface JsonAbi {
   readonly functions: readonly JsonAbiFunction[];
   readonly messagesTypes: readonly JsonAbiMessagesType[];
   readonly configurables: readonly JsonAbiConfigurable[];
-  readonly encoding?: string;
+  readonly encodingVersion: string;
 }
 
 export interface JsonAbi2 {

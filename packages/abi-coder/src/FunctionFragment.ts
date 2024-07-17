@@ -47,7 +47,7 @@ export class FunctionFragment<
     this.signature = FunctionFragment.getSignature(this.jsonAbi, this.jsonFn);
     this.selector = FunctionFragment.getFunctionSelector(this.signature);
     this.selectorBytes = new StdStringCoder().encode(name);
-    this.encoding = getEncodingVersion(jsonAbi.encoding);
+    this.encoding = getEncodingVersion(jsonAbi.encodingVersion);
 
     this.attributes = this.jsonFn.attributes ?? [];
   }

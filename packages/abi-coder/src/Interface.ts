@@ -18,7 +18,7 @@ export class Interface<TAbi extends JsonAbi = JsonAbi> {
 
   constructor(jsonAbi: TAbi) {
     this.jsonAbi = jsonAbi;
-    this.encoding = getEncodingVersion(jsonAbi.encoding);
+    this.encoding = getEncodingVersion(jsonAbi.encodingVersion);
 
     this.functions = Object.fromEntries(
       this.jsonAbi.functions.map((x) => [x.name, new FunctionFragment(this.jsonAbi, x.name)])
