@@ -6,13 +6,13 @@ import { arrayify } from '@fuel-ts/utils';
 import { AbiCoder } from './AbiCoder';
 import { FunctionFragment } from './FunctionFragment';
 import type { InputValue } from './encoding/coders/AbstractCoder';
-import type { JsonAbi, JsonAbiConfigurable } from './types/JsonAbi';
+import type { JsonAbi } from './types/JsonAbi';
 import { type EncodingVersion } from './utils/constants';
 import { findTypeById, getEncodingVersion } from './utils/json-abi';
 
 export class Interface<TAbi extends JsonAbi = JsonAbi> {
   readonly functions!: Record<string, FunctionFragment>;
-  readonly configurables: Record<string, JsonAbiConfigurable>;
+  readonly configurables: Record<string, TAbi['configurables'][number]>;
   readonly jsonAbi: TAbi;
   readonly encoding: EncodingVersion;
 
@@ -66,7 +66,7 @@ export class Interface<TAbi extends JsonAbi = JsonAbi> {
       );
     }
 
-    return AbiCoder.decode(this.jsonAbi, loggedType.loggedType, arrayify(data), 0, {
+    return AbiCoder.decode(this.jsonAbi, loggedType.concreteTypeId, arrayify(data), 0, {
       encoding: this.encoding,
     });
   }
@@ -80,7 +80,7 @@ export class Interface<TAbi extends JsonAbi = JsonAbi> {
       );
     }
 
-    return AbiCoder.encode(this.jsonAbi, configurable.configurableType, value, {
+    return AbiCoder.encode(this.jsonAbi, configurable.concreteTypeId, value, {
       encoding: this.encoding,
     });
   }

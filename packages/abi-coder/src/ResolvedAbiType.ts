@@ -1,84 +1,143 @@
 import { FuelError, ErrorCode } from '@fuel-ts/errors';
 
-import type { JsonAbi, JsonAbiArgument } from './types/JsonAbi';
+import type { Component, ConcreteType, JsonAbi, TypeArgument } from './types/JsonAbi';
 import { arrayRegEx, enumRegEx, genericRegEx, stringRegEx, structRegEx } from './utils/constants';
-import { findTypeById } from './utils/json-abi';
 
 export class ResolvedAbiType {
   readonly abi: JsonAbi;
-  name: string;
+  readonly name: string;
   readonly type: string;
-  readonly originalTypeArguments: readonly JsonAbiArgument[] | null;
-  readonly components: readonly ResolvedAbiType[] | null;
+  readonly originalTypeArguments: readonly string[] | undefined;
+  readonly components: readonly ResolvedAbiType[] | undefined;
 
-  constructor(abi: JsonAbi, argument: JsonAbiArgument) {
+  constructor(abi: JsonAbi, abiType: ConcreteType | TypeArgument, name: string) {
     this.abi = abi;
+    this.name = name;
 
-    this.name = argument.name;
+    if ('concreteTypeId' in abiType) {
+      // it's a concrete type
 
-    const jsonABIType = findTypeById(abi, argument.type);
+      const concreteType = abiType;
 
-    if (jsonABIType.type.length > 256) {
-      throw new FuelError(
-        ErrorCode.INVALID_COMPONENT,
-        `The provided ABI type is too long: ${jsonABIType.type}.`
-      );
+      this.type = concreteType.type;
+      if (concreteType.metadataTypeId) {
+        this.originalTypeArguments = concreteType.typeArguments;
+
+        if (concreteType.typeArguments && concreteType.typeArguments.length > 256) {
+          throw new FuelError(
+            ErrorCode.INVALID_COMPONENT,
+            `The provided ABI type is too long: ${concreteType.type}.`
+          );
+        }
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        const metadataType = this.abi.typeMetadata.find(
+          (tm) => tm.metadataTypeId === concreteType.metadataTypeId
+        )!;
+
+        this.type = metadataType.type;
+
+        this.components = ResolvedAbiType.getResolvedGenericComponents(
+          abi,
+          concreteType.typeArguments,
+          metadataType.components,
+          metadataType.typeParameters ??
+            ResolvedAbiType.getImplicitGenericTypeParameters(abi, metadataType.components)
+        );
+      }
+    } else {
+      // it's a type argument
+
+      const typeArgument = abiType;
+
+      if (typeof typeArgument.typeId === 'string') {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        const concreteType = abi.concreteTypes.find(
+          (x) => x.concreteTypeId === typeArgument.typeId
+        )!;
+        this.type = concreteType.type;
+        if (concreteType.metadataTypeId) {
+          this.originalTypeArguments = concreteType.typeArguments;
+
+          if (concreteType.typeArguments && concreteType.typeArguments.length > 256) {
+            throw new FuelError(
+              ErrorCode.INVALID_COMPONENT,
+              `The provided ABI type is too long: ${concreteType.type}.`
+            );
+          }
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+          const metadataType = this.abi.typeMetadata.find(
+            (tm) => tm.metadataTypeId === concreteType.metadataTypeId
+          )!;
+
+          this.type = metadataType.type;
+
+          this.components = ResolvedAbiType.getResolvedGenericComponents(
+            abi,
+            concreteType.typeArguments,
+            metadataType.components,
+            metadataType.typeParameters ??
+              ResolvedAbiType.getImplicitGenericTypeParameters(abi, metadataType.components)
+          );
+        }
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        const metadataType = abi.typeMetadata.find(
+          (tm) => tm.metadataTypeId === typeArgument.typeId
+        )!;
+
+        this.type = metadataType?.type;
+
+        this.components = ResolvedAbiType.getResolvedGenericComponents(
+          abi,
+          typeArgument.typeArguments,
+          metadataType.components,
+          metadataType.typeParameters ??
+            ResolvedAbiType.getImplicitGenericTypeParameters(abi, metadataType.components)
+        );
+      }
     }
-
-    this.type = jsonABIType.type;
-    this.originalTypeArguments = argument.typeArguments;
-    this.components = ResolvedAbiType.getResolvedGenericComponents(
-      abi,
-      argument,
-      jsonABIType.components,
-      jsonABIType.typeParameters ??
-        ResolvedAbiType.getImplicitGenericTypeParameters(abi, jsonABIType.components)
-    );
   }
 
   private static getResolvedGenericComponents(
     abi: JsonAbi,
-    arg: JsonAbiArgument,
-    components: readonly JsonAbiArgument[] | null,
-    typeParameters: readonly number[] | null
+    typeArguments: readonly string[] | readonly TypeArgument[] | undefined,
+    components: readonly Component[] | undefined,
+    typeParameters: readonly number[] | undefined
   ) {
-    if (components === null) {
-      return null;
+    if (components === undefined) {
+      return undefined;
     }
-    if (typeParameters === null || typeParameters.length === 0) {
-      return components.map((c) => new ResolvedAbiType(abi, c));
+    if (typeParameters === undefined || typeParameters.length === 0) {
+      return components.map((c) => new ResolvedAbiType(abi, c, c.name));
     }
 
     const typeParametersAndArgsMap = typeParameters.reduce(
       (obj, typeParameter, typeParameterIndex) => {
-        const o: Record<number, JsonAbiArgument> = { ...obj };
-        o[typeParameter] = structuredClone(
-          arg.typeArguments?.[typeParameterIndex]
-        ) as JsonAbiArgument;
+        const o: Record<string, string> = { ...obj };
+        o[typeParameter.toString()] = structuredClone(
+          typeArguments?.[typeParameterIndex]
+        ) as string;
         return o;
       },
-      {} as Record<number, JsonAbiArgument>
+      {} as Record<string, string>
     );
 
-    const resolvedComponents = this.resolveGenericArgTypes(
-      abi,
-      components,
-      typeParametersAndArgsMap
-    );
+    const resolvedArgs = this.resolveGenericArgTypes(abi, components, typeParametersAndArgsMap);
 
-    return resolvedComponents.map((c) => new ResolvedAbiType(abi, c));
+    return resolvedArgs.map((c) => new ResolvedAbiType(abi, c, (c as Component).name ?? ''));
   }
 
   private static resolveGenericArgTypes(
     abi: JsonAbi,
-    args: readonly JsonAbiArgument[],
-    typeParametersAndArgsMap: Record<number, JsonAbiArgument>
-  ): readonly JsonAbiArgument[] {
+    args: readonly TypeArgument[],
+    typeParametersAndArgsMap: Record<string, string>
+  ): TypeArgument[] {
     return args.map((arg) => {
-      if (typeParametersAndArgsMap[arg.type] !== undefined) {
+      if (typeParametersAndArgsMap[arg.typeId] !== undefined) {
         return {
-          ...typeParametersAndArgsMap[arg.type],
-          name: arg.name,
+          ...arg,
+          typeId: typeParametersAndArgsMap[arg.typeId],
+          name: (arg as Component).name,
         };
       }
 
@@ -93,14 +152,23 @@ export class ResolvedAbiType {
         };
       }
 
-      const argType = findTypeById(abi, arg.type);
-      const implicitTypeParameters = this.getImplicitGenericTypeParameters(abi, argType.components);
+      if (typeof arg.typeId === 'number') {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        const metadataType = abi.typeMetadata.find((tm) => tm.metadataTypeId === arg.typeId)!;
 
-      if (implicitTypeParameters && implicitTypeParameters.length > 0) {
-        return {
-          ...structuredClone(arg),
-          typeArguments: implicitTypeParameters.map((itp) => typeParametersAndArgsMap[itp]),
-        };
+        const implicitTypeParameters = this.getImplicitGenericTypeParameters(
+          abi,
+          metadataType.components
+        );
+
+        if (implicitTypeParameters && implicitTypeParameters.length > 0) {
+          return {
+            ...structuredClone(arg),
+            typeArguments: implicitTypeParameters.map((itp) => ({
+              typeId: typeParametersAndArgsMap[itp],
+            })),
+          };
+        }
       }
 
       return arg;
@@ -109,20 +177,23 @@ export class ResolvedAbiType {
 
   private static getImplicitGenericTypeParameters(
     abi: JsonAbi,
-    args: readonly JsonAbiArgument[] | null,
+    args: readonly TypeArgument[] | null,
     implicitGenericParametersParam?: number[]
   ) {
     if (!Array.isArray(args)) {
-      return null;
+      return undefined;
     }
 
     const implicitGenericParameters: number[] = implicitGenericParametersParam ?? [];
 
     args.forEach((a) => {
-      const argType = findTypeById(abi, a.type);
+      const metadataType = this.getMetadataType(abi, a);
+      if (metadataType === undefined) {
+        return;
+      }
 
-      if (genericRegEx.test(argType.type)) {
-        implicitGenericParameters.push(argType.typeId);
+      if (genericRegEx.test(metadataType.type)) {
+        implicitGenericParameters.push(a.typeId);
         return;
       }
 
@@ -132,7 +203,16 @@ export class ResolvedAbiType {
       this.getImplicitGenericTypeParameters(abi, a.typeArguments, implicitGenericParameters);
     });
 
-    return implicitGenericParameters.length > 0 ? implicitGenericParameters : null;
+    return implicitGenericParameters.length > 0 ? implicitGenericParameters : undefined;
+  }
+
+  private static getMetadataType(abi: JsonAbi, a: TypeArgument) {
+    if (typeof a.typeId === 'number') {
+      return abi.typeMetadata.find((tm) => tm.metadataTypeId === a.typeId);
+    }
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    const { metadataTypeId } = abi.concreteTypes.find((ct) => ct.concreteTypeId === a.typeId)!;
+    return abi.typeMetadata.find((tm) => tm.metadataTypeId === metadataTypeId);
   }
 
   getSignature(): string {

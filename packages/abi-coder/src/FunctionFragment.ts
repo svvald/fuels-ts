@@ -10,12 +10,7 @@ import { ResolvedAbiType } from './ResolvedAbiType';
 import type { DecodedValue, InputValue } from './encoding/coders/AbstractCoder';
 import { StdStringCoder } from './encoding/coders/StdStringCoder';
 import { TupleCoder } from './encoding/coders/TupleCoder';
-import type {
-  JsonAbi,
-  JsonAbiArgument,
-  JsonAbiFunction,
-  JsonAbiFunctionAttribute,
-} from './types/JsonAbi';
+import type { AbiFunction, JsonAbi } from './types/JsonAbi';
 import type { EncodingVersion } from './utils/constants';
 import { OPTION_CODER_TYPE } from './utils/constants';
 import {
@@ -34,12 +29,12 @@ export class FunctionFragment<
   readonly selectorBytes: Uint8Array;
   readonly encoding: EncodingVersion;
   readonly name: string;
-  readonly jsonFn: JsonAbiFunction;
-  readonly attributes: readonly JsonAbiFunctionAttribute[];
+  readonly jsonFn: AbiFunction;
+  readonly attributes: AbiFunction['attributes'];
 
-  private readonly jsonAbi: JsonAbi;
+  private readonly jsonAbi: TAbi;
 
-  constructor(jsonAbi: JsonAbi, name: FnName) {
+  constructor(jsonAbi: TAbi, name: FnName) {
     this.jsonAbi = jsonAbi;
     this.jsonFn = findFunctionByName(this.jsonAbi, name);
 
@@ -52,9 +47,9 @@ export class FunctionFragment<
     this.attributes = this.jsonFn.attributes ?? [];
   }
 
-  private static getSignature(abi: JsonAbi, fn: JsonAbiFunction): string {
+  private static getSignature(abi: JsonAbi, fn: AbiFunction): string {
     const inputsSignatures = fn.inputs.map((input) =>
-      new ResolvedAbiType(abi, input).getSignature()
+      new ResolvedAbiType(abi, input.concreteTypeId).getSignature()
     );
     return `${fn.name}(${inputsSignatures.join(',')})`;
   }
@@ -77,7 +72,7 @@ export class FunctionFragment<
     }
 
     const coders = nonEmptyInputs.map((t) =>
-      AbiCoder.getCoder(this.jsonAbi, t, {
+      AbiCoder.getCoder(this.jsonAbi, t.concreteTypeId, {
         encoding: this.encoding,
       })
     );
@@ -87,16 +82,20 @@ export class FunctionFragment<
 
   private static verifyArgsAndInputsAlign(
     args: InputValue[],
-    inputs: readonly JsonAbiArgument[],
+    inputs: AbiFunction['inputs'],
     abi: JsonAbi
   ) {
     if (args.length === inputs.length) {
       return;
     }
 
-    const inputTypes = inputs.map((input) => findTypeById(abi, input.type));
+    const inputTypes = inputs.map((input) => findTypeById(abi, input.concreteTypeId));
+
     const optionalInputs = inputTypes.filter(
-      (x) => x.type === OPTION_CODER_TYPE || x.type === '()'
+      (ct) =>
+        ct.type === '()' ||
+        abi.typeMetadata.find((tm) => tm.metadataTypeId === ct.metadataTypeId)?.type ===
+          OPTION_CODER_TYPE
     );
     if (optionalInputs.length === inputTypes.length) {
       return;
@@ -143,7 +142,9 @@ export class FunctionFragment<
 
     const result = nonEmptyInputs.reduce(
       (obj: { decoded: unknown[]; offset: number }, input) => {
-        const coder = AbiCoder.getCoder(this.jsonAbi, input, { encoding: this.encoding });
+        const coder = AbiCoder.getCoder(this.jsonAbi, input.concreteTypeId, {
+          encoding: this.encoding,
+        });
         const [decodedValue, decodedValueByteSize] = coder.decode(bytes, obj.offset);
 
         return {
@@ -158,7 +159,7 @@ export class FunctionFragment<
   }
 
   decodeOutput(data: BytesLike): [DecodedValue | undefined, number] {
-    const outputAbiType = findTypeById(this.jsonAbi, this.jsonFn.output.type);
+    const outputAbiType = findTypeById(this.jsonAbi, this.jsonFn.output);
     if (outputAbiType.type === '()') {
       return [undefined, 0];
     }
@@ -177,7 +178,7 @@ export class FunctionFragment<
    * @returns True if the function is read-only or pure, false otherwise.
    */
   isReadOnly(): boolean {
-    const storageAttribute = this.attributes.find((attr) => attr.name === 'storage');
+    const storageAttribute = this.attributes?.find((attr) => attr.name === 'storage');
     return !storageAttribute?.arguments.includes('write');
   }
 }
