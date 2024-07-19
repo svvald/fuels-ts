@@ -1,7 +1,7 @@
 import { ErrorCode, FuelError } from '@fuel-ts/errors';
 
 import type { ResolvedAbiType } from '../ResolvedAbiType';
-import type { AbiFunction, JsonAbi } from '../types/JsonAbi';
+import type { AbiFunction, JsonAbi, TypeArgument } from '../types/JsonAbi';
 
 import { ENCODING_V1, type EncodingVersion } from './constants';
 
@@ -87,5 +87,5 @@ export const findVectorBufferArgument = (components: readonly ResolvedAbiType[])
       `The Vec type provided is missing or has a malformed 'buf' component.`
     );
   }
-  return bufferTypeArgument;
+  return bufferTypeArgument as TypeArgument;
 };

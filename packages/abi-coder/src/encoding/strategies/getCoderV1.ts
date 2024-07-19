@@ -116,7 +116,7 @@ export const getCoder: GetCoderFn = (
 
   if (resolvedAbiType.type === VEC_CODER_TYPE) {
     const arg = findVectorBufferArgument(components);
-    const argType = new ResolvedAbiType(resolvedAbiType.abi, arg);
+    const argType = new ResolvedAbiType(resolvedAbiType.abi, arg, undefined);
 
     const itemCoder = getCoder(argType, { encoding: ENCODING_V1 });
     return new VecCoder(itemCoder as Coder);

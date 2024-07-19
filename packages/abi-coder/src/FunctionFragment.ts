@@ -49,7 +49,12 @@ export class FunctionFragment<
 
   private static getSignature(abi: JsonAbi, fn: AbiFunction): string {
     const inputsSignatures = fn.inputs.map((input) =>
-      new ResolvedAbiType(abi, input.concreteTypeId).getSignature()
+      new ResolvedAbiType(
+        abi,
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        abi.concreteTypes.find((ct) => ct.concreteTypeId === input.concreteTypeId)!,
+        input.name
+      ).getSignature()
     );
     return `${fn.name}(${inputsSignatures.join(',')})`;
   }
