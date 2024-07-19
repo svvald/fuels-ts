@@ -12,89 +12,89 @@
 // }
 
 export interface JsonAbi {
-  specVersion: string;
-  encodingVersion: string;
-  programType: 'script' | 'contract' | 'predicate' | 'library';
-  concreteTypes: readonly ConcreteType[];
-  typeMetadata: readonly TypeMetadata[];
-  functions: readonly AbiFunction[];
-  loggedTypes: readonly LoggedType[];
-  messageTypes: readonly MessageType[];
-  configurables: readonly Configurable[];
+  readonly specVersion: string;
+  readonly encodingVersion: string;
+  readonly programType: 'script' | 'contract' | 'predicate' | 'library';
+  readonly concreteTypes: readonly ConcreteType[];
+  readonly typeMetadata: readonly MetadataType[];
+  readonly functions: readonly AbiFunction[];
+  readonly loggedTypes: readonly LoggedType[];
+  readonly messageTypes: readonly MessageType[];
+  readonly configurables: readonly Configurable[];
 }
 
 export interface ConcreteType {
-  type: string;
-  concreteTypeId: string;
-  metadataTypeId?: number;
-  typeArguments?: readonly string[];
+  readonly type: string;
+  readonly concreteTypeId: string;
+  readonly metadataTypeId?: number;
+  readonly typeArguments?: readonly string[];
 }
 
-export interface TypeMetadata {
-  type: string;
-  metadataTypeId: number;
-  components: readonly Component[];
-  typeParameters?: readonly number[];
+export interface MetadataType {
+  readonly type: string;
+  readonly metadataTypeId: number;
+  readonly components?: readonly Component[];
+  readonly typeParameters?: readonly number[];
 }
 
 export interface Component extends TypeArgument {
-  name: string;
+  readonly name: string;
 }
 
 export interface TypeArgument {
-  typeId: number | string; // the type metadata declaration ID or type concrete declaration hash based ID of the type of the component.
-  typeArguments?: TypeArgument[];
+  readonly typeId: number | string; // the type metadata declaration ID or type concrete declaration hash based ID of the type of the component.
+  readonly typeArguments?: readonly TypeArgument[];
 }
 
 export interface AbiFunction {
-  name: string;
-  inputs: readonly AbiFunctionInput[];
-  output: string;
-  attributes?: readonly AbiFunctionAttribute[];
+  readonly name: string;
+  readonly inputs: readonly AbiFunctionInput[];
+  readonly output: string;
+  readonly attributes?: readonly AbiFunctionAttribute[];
 }
 
 export interface AbiFunctionInput {
-  name: string;
-  concreteTypeId: string;
+  readonly name: string;
+  readonly concreteTypeId: string;
 }
 
 export type AbiFunctionAttribute = Storage | Payable | Test | Inline | DocComment | Doc;
 
 interface Payable {
-  name: 'payable';
+  readonly name: 'payable';
 }
 interface Storage {
-  name: 'storage';
-  arguments: readonly ('read' | 'write')[];
+  readonly name: 'storage';
+  readonly arguments: readonly ('read' | 'write')[];
 }
 interface Test {
-  name: 'test';
+  readonly name: 'test';
 }
 interface Inline {
-  name: 'inline';
-  arguments: 'never' | 'always';
+  readonly name: 'inline';
+  readonly arguments: 'never' | 'always';
 }
 interface DocComment {
-  name: 'doc-comment';
-  arguments: string;
+  readonly name: 'doc-comment';
+  readonly arguments: string;
 }
 interface Doc {
-  name: 'doc';
+  readonly name: 'doc';
 }
 
 export interface LoggedType {
-  logId: string;
-  concreteTypeId: string; // the _type concrete declaration_ hash based ID of the value being logged.
+  readonly logId: string;
+  readonly concreteTypeId: string; // the _type concrete declaration_ hash based ID of the value being logged.
 }
 
 export interface MessageType {
-  message_id: string;
-  concreteTypeId: string;
+  readonly message_id: string;
+  readonly concreteTypeId: string;
 }
 export interface Configurable {
-  name: string;
-  concreteTypeId: string;
-  offset: number;
+  readonly name: string;
+  readonly concreteTypeId: string;
+  readonly offset: number;
 }
 
 // export interface JsonAbiType {

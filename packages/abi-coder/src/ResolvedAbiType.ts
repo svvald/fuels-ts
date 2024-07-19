@@ -1,22 +1,35 @@
 import { FuelError, ErrorCode } from '@fuel-ts/errors';
 
-import type { Component, ConcreteType, JsonAbi, TypeArgument } from './types/JsonAbi';
+import type { Component, ConcreteType, JsonAbi, TypeArgument, MetadataType } from './types/JsonAbi';
 import { arrayRegEx, enumRegEx, genericRegEx, stringRegEx, structRegEx } from './utils/constants';
 
 export class ResolvedAbiType {
-  readonly abi: JsonAbi;
-  readonly name: string;
   readonly type: string;
-  readonly originalTypeArguments: readonly string[] | undefined;
+  readonly originalTypeArguments: ConcreteType['typeArguments'] | TypeArgument['typeArguments'];
   readonly components: readonly ResolvedAbiType[] | undefined;
+
+  constructor(
+    readonly abi: JsonAbi,
+    abiType: ConcreteType | TypeArgument,
+    readonly name: string | undefined
+  ) {
+    this.abi = abi;
+
+    const { type, components, originalTypeArguments } =
+      'concreteTypeId' in abiType
+        ? ResolvedAbiType.getResolvedConcreteType(abi, abiType)
+        : ResolvedAbiType.getResolvedTypeArgument(abi, abiType);
+
+    this.type = type;
+    this.components = components;
+    this.originalTypeArguments = originalTypeArguments;
+  }
 
   private static getResolvedConcreteType(
     abi: JsonAbi,
     concreteType: ConcreteType
   ): Pick<ResolvedAbiType, 'components' | 'type' | 'originalTypeArguments'> {
-    const metadataType = abi.typeMetadata.find(
-      (tm) => tm.metadataTypeId === concreteType.metadataTypeId
-    );
+    const metadataType = this.getMetadataType(abi, concreteType);
 
     const type = metadataType?.type ?? concreteType.type;
     const originalTypeArguments = concreteType.typeArguments;
@@ -25,7 +38,7 @@ export class ResolvedAbiType {
       return { type, originalTypeArguments, components: undefined };
     }
 
-    if (concreteType.typeArguments && concreteType.typeArguments.length > 256) {
+    if (originalTypeArguments && originalTypeArguments.length > 256) {
       throw new FuelError(
         ErrorCode.INVALID_COMPONENT,
         `The provided ABI type is too long: ${concreteType.type}.`
@@ -35,9 +48,7 @@ export class ResolvedAbiType {
     const components = ResolvedAbiType.getResolvedGenericComponents(
       abi,
       concreteType.typeArguments,
-      metadataType.components,
-      metadataType.typeParameters ??
-        ResolvedAbiType.getImplicitGenericTypeParameters(abi, metadataType.components)
+      metadataType
     );
 
     return {
@@ -52,83 +63,79 @@ export class ResolvedAbiType {
     typeArgument: TypeArgument
   ): Pick<ResolvedAbiType, 'components' | 'type' | 'originalTypeArguments'> {
     if (typeof typeArgument.typeId === 'string') {
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      const concreteType = abi.concreteTypes.find((x) => x.concreteTypeId === typeArgument.typeId)!;
+      const concreteType = abi.concreteTypes.find(
+        (x) => x.concreteTypeId === typeArgument.typeId
+      ) as ConcreteType;
+
       return ResolvedAbiType.getResolvedConcreteType(abi, concreteType);
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    const metadataType = abi.typeMetadata.find((tm) => tm.metadataTypeId === typeArgument.typeId)!;
+    const metadataType = this.getMetadataType(abi, typeArgument) as MetadataType;
 
     const components = ResolvedAbiType.getResolvedGenericComponents(
       abi,
       typeArgument.typeArguments,
-      metadataType.components,
-      metadataType.typeParameters ??
-        ResolvedAbiType.getImplicitGenericTypeParameters(abi, metadataType.components)
+      metadataType
     );
     return {
       type: metadataType.type,
-      components,
       originalTypeArguments: typeArgument.typeArguments,
+      components,
     };
-  }
-
-  constructor(abi: JsonAbi, abiType: ConcreteType | TypeArgument, name: string) {
-    this.abi = abi;
-    this.name = name;
-
-    const { type, components, originalTypeArguments } =
-      'concreteTypeId' in abiType
-        ? ResolvedAbiType.getResolvedConcreteType(abi, abiType)
-        : ResolvedAbiType.getResolvedTypeArgument(abi, abiType);
-
-    this.type = type;
-    this.components = components;
-    this.originalTypeArguments = originalTypeArguments;
   }
 
   private static getResolvedGenericComponents(
     abi: JsonAbi,
-    typeArguments: readonly string[] | readonly TypeArgument[] | undefined,
-    components: readonly Component[] | undefined,
-    typeParameters: readonly number[] | undefined
+    typeArguments: ConcreteType['typeArguments'] | TypeArgument['typeArguments'],
+    metadataType: MetadataType
   ) {
-    if (components === undefined) {
+    if (metadataType.components === undefined) {
       return undefined;
     }
+
+    const typeParameters =
+      metadataType.typeParameters ??
+      ResolvedAbiType.getImplicitGenericTypeParameters(abi, metadataType.components);
+
     if (typeParameters === undefined || typeParameters.length === 0) {
-      return components.map((c) => new ResolvedAbiType(abi, c, c.name));
+      return metadataType.components.map((c) => new ResolvedAbiType(abi, c, c.name));
     }
 
     const typeParametersAndArgsMap = typeParameters.reduce(
-      (obj, typeParameter, typeParameterIndex) => {
-        const o: Record<string, string> = { ...obj };
-        o[typeParameter.toString()] = structuredClone(
-          typeArguments?.[typeParameterIndex]
-        ) as string;
-        return o;
-      },
-      {} as Record<string, string>
+      (obj, typeParameter, typeParameterIndex) => ({
+        ...obj,
+        [typeParameter]: structuredClone(typeArguments?.[typeParameterIndex]),
+      }),
+      {} satisfies Record<number, string | TypeArgument>
     );
 
-    const resolvedArgs = this.resolveGenericArgTypes(abi, components, typeParametersAndArgsMap);
+    const resolvedArgs = this.resolveGenericArgTypes(
+      abi,
+      metadataType.components,
+      typeParametersAndArgsMap
+    );
 
-    return resolvedArgs.map((c) => new ResolvedAbiType(abi, c, (c as Component).name ?? ''));
+    return resolvedArgs.map((c) => new ResolvedAbiType(abi, c, (c as Component).name));
   }
 
   private static resolveGenericArgTypes(
     abi: JsonAbi,
-    args: readonly TypeArgument[],
-    typeParametersAndArgsMap: Record<string, string>
-  ): TypeArgument[] {
+    args: NonNullable<MetadataType['components'] | TypeArgument['typeArguments']>,
+    typeParametersAndArgsMap: Record<number, string | TypeArgument>
+  ): NonNullable<TypeArgument['typeArguments']> {
     return args.map((arg) => {
-      if (typeParametersAndArgsMap[arg.typeId] !== undefined) {
-        return {
-          ...arg,
-          typeId: typeParametersAndArgsMap[arg.typeId],
-          name: (arg as Component).name,
-        };
+      const mappedArg = typeParametersAndArgsMap[+arg.typeId];
+      if (mappedArg !== undefined) {
+        const name = (arg as Component).name;
+        return typeof mappedArg === 'string'
+          ? {
+              typeId: mappedArg,
+              name,
+            }
+          : {
+              ...mappedArg,
+              name,
+            };
       }
 
       if (arg.typeArguments) {
@@ -142,21 +149,25 @@ export class ResolvedAbiType {
         };
       }
 
-      if (typeof arg.typeId === 'number') {
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        const metadataType = abi.typeMetadata.find((tm) => tm.metadataTypeId === arg.typeId)!;
+      const metadataType = this.getMetadataType(abi, arg);
 
+      if (metadataType) {
         const implicitTypeParameters = this.getImplicitGenericTypeParameters(
           abi,
           metadataType.components
         );
 
-        if (implicitTypeParameters && implicitTypeParameters.length > 0) {
+        if (implicitTypeParameters.length > 0) {
           return {
             ...structuredClone(arg),
-            typeArguments: implicitTypeParameters.map((itp) => ({
-              typeId: typeParametersAndArgsMap[itp],
-            })),
+            typeArguments: implicitTypeParameters.map((itp) => {
+              const implicitMappedArg = typeParametersAndArgsMap[itp];
+              return typeof implicitMappedArg === 'string'
+                ? {
+                    typeId: implicitMappedArg,
+                  }
+                : implicitMappedArg;
+            }),
           };
         }
       }
@@ -167,41 +178,39 @@ export class ResolvedAbiType {
 
   private static getImplicitGenericTypeParameters(
     abi: JsonAbi,
-    args: readonly TypeArgument[] | null,
-    implicitGenericParametersParam?: number[]
+    args: TypeArgument['typeArguments'],
+    implicitGenericParameters: number[] = []
   ) {
-    if (!Array.isArray(args)) {
-      return undefined;
-    }
-
-    const implicitGenericParameters: number[] = implicitGenericParametersParam ?? [];
-
-    args.forEach((a) => {
-      const metadataType = this.getMetadataType(abi, a);
+    (args ?? []).forEach((arg) => {
+      const metadataType = this.getMetadataType(abi, arg);
       if (metadataType === undefined) {
         return;
       }
 
       if (genericRegEx.test(metadataType.type)) {
-        implicitGenericParameters.push(a.typeId);
+        implicitGenericParameters.push(metadataType.metadataTypeId);
         return;
       }
 
-      if (!Array.isArray(a.typeArguments)) {
+      if (!Array.isArray(arg.typeArguments)) {
         return;
       }
-      this.getImplicitGenericTypeParameters(abi, a.typeArguments, implicitGenericParameters);
+      this.getImplicitGenericTypeParameters(abi, arg.typeArguments, implicitGenericParameters);
     });
 
-    return implicitGenericParameters.length > 0 ? implicitGenericParameters : undefined;
+    return implicitGenericParameters;
   }
 
-  private static getMetadataType(abi: JsonAbi, a: TypeArgument) {
-    if (typeof a.typeId === 'number') {
-      return abi.typeMetadata.find((tm) => tm.metadataTypeId === a.typeId);
+  private static getMetadataType(abi: JsonAbi, type: ConcreteType | TypeArgument) {
+    const typeId = 'concreteTypeId' in type ? type.metadataTypeId : type.typeId;
+
+    if (typeof typeId === 'number') {
+      return abi.typeMetadata.find((tm) => tm.metadataTypeId === typeId);
     }
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    const { metadataTypeId } = abi.concreteTypes.find((ct) => ct.concreteTypeId === a.typeId)!;
+    const { metadataTypeId } = abi.concreteTypes.find(
+      (ct) => ct.concreteTypeId === typeId
+    ) as ConcreteType;
+
     return abi.typeMetadata.find((tm) => tm.metadataTypeId === metadataTypeId);
   }
 
@@ -258,8 +267,12 @@ export class ResolvedAbiType {
     const typeArgumentsSignature =
       this.originalTypeArguments !== null
         ? `<${this.originalTypeArguments
-            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-            ?.map((ta) => this.abi.concreteTypes.find((ct) => ct.concreteTypeId === ta)!)
+            ?.map((ta) =>
+              typeof ta === 'string'
+                ? // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+                  this.abi.concreteTypes.find((ct) => ct.concreteTypeId === ta)!
+                : ta
+            )
             .map((a) => new ResolvedAbiType(this.abi, a, '').getSignature())
             .join(',')}>`
         : '';
