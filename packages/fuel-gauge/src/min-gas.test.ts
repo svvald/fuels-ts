@@ -1,53 +1,53 @@
 import {
+  ContractFactory,
+  Wallet,
+  FUEL_NETWORK_URL,
+  Provider,
   bn,
   TransactionStatus,
   ScriptTransactionRequest,
   Address,
+  Predicate,
   hexlify,
   getGasUsedFromReceipts,
   BigNumberCoder,
-  ContractFactory,
 } from 'fuels';
-import { launchTestNode } from 'fuels/test-utils';
+import { seedTestWallet } from 'fuels/test-utils';
 
-import {
-  ComplexPredicateAbi__factory,
-  ComplexScriptAbi__factory,
-  CoverageContractAbi__factory,
-} from '../test/typegen';
-import CoverageContractAbiHex from '../test/typegen/contracts/CoverageContractAbi.hex';
+import { FuelGaugeProjectsEnum, getFuelGaugeForcProject } from '../test/fixtures';
 
 /**
  * @group node
- * @group browser
  */
-describe('Minimum gas tests', () => {
-  it('sets gas requirements (contract)', async () => {
-    using launched = await launchTestNode();
+describe(__filename, () => {
+  let provider: Provider;
+  let baseAssetId: string;
 
-    const {
-      provider,
-      wallets: [wallet],
-    } = launched;
+  beforeAll(async () => {
+    provider = await Provider.create(FUEL_NETWORK_URL);
+    baseAssetId = provider.getBaseAssetId();
+  });
+
+  it('sets gas requirements (contract)', async () => {
+    const wallet = Wallet.generate({ provider });
+    await seedTestWallet(wallet, [[500_000, baseAssetId]]);
 
     /**
      * Create a contract transaction
      */
 
-    const contractFactory = new ContractFactory(
-      CoverageContractAbiHex,
-      CoverageContractAbi__factory.abi,
-      wallet
+    const { abiContents, binHexlified, storageSlots } = getFuelGaugeForcProject(
+      FuelGaugeProjectsEnum.COVERAGE_CONTRACT
     );
 
+    const contractFactory = new ContractFactory(binHexlified, abiContents, wallet);
     const { transactionRequest: request } = contractFactory.createTransactionRequest({
-      storageSlots: CoverageContractAbi__factory.storageSlots,
+      storageSlots,
     });
-
     const resources = await provider.getResourcesToSpend(wallet.address, [
       {
         amount: bn(100_000),
-        assetId: provider.getBaseAssetId(),
+        assetId: baseAssetId,
       },
     ]);
     request.addResources(resources);
@@ -69,22 +69,19 @@ describe('Minimum gas tests', () => {
   });
 
   it('sets gas requirements (script)', async () => {
-    using launched = await launchTestNode();
-
-    const {
-      provider,
-      wallets: [sender],
-    } = launched;
+    const sender = Wallet.generate({ provider });
+    await seedTestWallet(sender, [[500_000, baseAssetId]]);
 
     /**
      * Create a script transaction
      */
+    const { binHexlified } = getFuelGaugeForcProject(FuelGaugeProjectsEnum.COMPLEX_SCRIPT);
 
     const request = new ScriptTransactionRequest({
-      script: ComplexScriptAbi__factory.bin,
+      script: binHexlified,
       scriptData: hexlify(new BigNumberCoder('u64').encode(bn(2000))),
     });
-    request.addCoinOutput(Address.fromRandom(), bn(100), provider.getBaseAssetId());
+    request.addCoinOutput(Address.fromRandom(), bn(100), baseAssetId);
 
     /**
      * Get the transaction cost to set a strict gasLimit and min gasPrice
@@ -107,29 +104,27 @@ describe('Minimum gas tests', () => {
   });
 
   it('sets gas requirements (predicate)', async () => {
-    using launched = await launchTestNode();
-
-    const {
-      provider,
-      wallets: [wallet],
-    } = launched;
+    const { abiContents, binHexlified } = getFuelGaugeForcProject(
+      FuelGaugeProjectsEnum.COMPLEX_PREDICATE
+    );
 
     /**
      * Setup predicate
      */
-    const predicate = ComplexPredicateAbi__factory.createInstance(provider, [bn(1000)]);
+    const predicate = new Predicate({
+      bytecode: binHexlified,
+      abi: abiContents,
+      provider,
+      inputData: [bn(1000)],
+    });
 
-    /**
-     * Fund the predicate
-     */
-    const tx = await wallet.transfer(predicate.address, 1_000_000, provider.getBaseAssetId());
-    await tx.wait();
+    await seedTestWallet(predicate, [[500_000, baseAssetId]]);
 
     /**
      * Create a script transaction transfer
      */
     const request = new ScriptTransactionRequest();
-    request.addCoinOutput(Address.fromRandom(), bn(100), provider.getBaseAssetId());
+    request.addCoinOutput(Address.fromRandom(), bn(100), baseAssetId);
 
     /**
      * Get the transaction cost to set a strict gasLimit and min gasPrice
@@ -153,34 +148,36 @@ describe('Minimum gas tests', () => {
   });
 
   it('sets gas requirements (account and predicate with script)', async () => {
-    using launched = await launchTestNode();
-
-    const {
-      provider,
-      wallets: [wallet],
-    } = launched;
-
-    const baseAssetId = provider.getBaseAssetId();
+    const { abiContents, binHexlified } = getFuelGaugeForcProject(
+      FuelGaugeProjectsEnum.COMPLEX_PREDICATE
+    );
+    /**
+     * Setup account
+     */
+    const wallet = Wallet.generate({ provider });
+    await seedTestWallet(wallet, [[500_000, baseAssetId]]);
 
     /**
      * Setup predicate
      */
-    const predicate = ComplexPredicateAbi__factory.createInstance(provider, [bn(1000)]);
-
-    /**
-     * Fund the predicate
-     */
-    const tx = await wallet.transfer(predicate.address, 1_000_000, baseAssetId);
-    await tx.wait();
+    const predicate = new Predicate({
+      bytecode: binHexlified,
+      abi: abiContents,
+      provider,
+      inputData: [bn(1000)],
+    });
+    await seedTestWallet(predicate, [[500_000, baseAssetId]]);
 
     /**
      * Create a script transaction
      */
+    const { binHexlified: scriptBin } = getFuelGaugeForcProject(
+      FuelGaugeProjectsEnum.COMPLEX_SCRIPT
+    );
     const request = new ScriptTransactionRequest({
-      script: ComplexScriptAbi__factory.bin,
+      script: scriptBin,
       scriptData: hexlify(new BigNumberCoder('u64').encode(bn(2000))),
     });
-
     // add predicate transfer
     const resourcesPredicate = await predicate.getResourcesToSpend([
       {

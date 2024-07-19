@@ -1,40 +1,45 @@
-import { Predicate, Wallet } from 'fuels';
-import { launchTestNode } from 'fuels/test-utils';
+import type { InputValue, Provider, WalletLocked, WalletUnlocked } from 'fuels';
+import { Predicate } from 'fuels';
 
-import { PredicateInputDataAbi__factory } from '../../test/typegen';
+import { FuelGaugeProjectsEnum, getFuelGaugeForcProject } from '../../test/fixtures';
 
-import { fundPredicate } from './utils/predicate';
+import { setupWallets, fundPredicate } from './utils/predicate';
 
 /**
  * @group node
- * @group browser
  */
-
 describe('Predicate', () => {
-  describe('Input Data', () => {
-    it('throws invalid transaction when input_predicate_data is required for predicate validation', async () => {
-      using launched = await launchTestNode();
-      const {
-        provider,
-        wallets: [wallet],
-      } = launched;
+  const { binHexlified, abiContents } = getFuelGaugeForcProject(
+    FuelGaugeProjectsEnum.PREDICATE_INPUT_DATA
+  );
 
+  describe('Input Data', () => {
+    let predicate: Predicate<InputValue[]>;
+    let wallet: WalletUnlocked;
+    let receiver: WalletLocked;
+    let provider: Provider;
+    let baseAssetId: string;
+
+    beforeEach(async () => {
+      [wallet, receiver] = await setupWallets();
+      provider = wallet.provider;
+      baseAssetId = provider.getBaseAssetId();
+    });
+
+    it('throws invalid transaction when input_predicate_data is required for predicate validation', async () => {
       const amountToPredicate = 200_000;
       const amountToReceiver = 50;
-
-      const predicate = new Predicate({
-        bytecode: PredicateInputDataAbi__factory.bin,
-        abi: PredicateInputDataAbi__factory.abi,
+      predicate = new Predicate({
+        bytecode: binHexlified,
+        abi: abiContents,
         provider,
         inputData: [true],
       });
 
       await fundPredicate(wallet, predicate, amountToPredicate);
 
-      const receiver = Wallet.generate({ provider });
-
       await expect(
-        predicate.transfer(receiver.address, amountToReceiver, provider.getBaseAssetId(), {
+        predicate.transfer(receiver.address, amountToReceiver, baseAssetId, {
           gasLimit: 1000,
         })
       ).rejects.toThrow(/PredicateVerificationFailed/i);

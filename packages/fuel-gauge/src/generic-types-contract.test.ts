@@ -1,18 +1,21 @@
 import { toHex } from 'fuels';
 
-import { GenericTypesContractAbi__factory } from '../test/typegen/contracts';
-import GenericTypesContractAbiHex from '../test/typegen/contracts/GenericTypesContractAbi.hex';
+import { FuelGaugeProjectsEnum, getFuelGaugeForcProject } from '../test/fixtures';
 
-import { launchTestContract } from './utils';
+import { setup } from './utils';
+
+const { binHexlified: contractBytecode, abiContents: abiJSON } = getFuelGaugeForcProject(
+  FuelGaugeProjectsEnum.GENERIC_TYPES_CONTRACT
+);
+
 /**
  * @group node
- * @group browser
  */
 describe('GenericTypesContract', () => {
   it('should call complex contract function with generic type', async () => {
-    using contract = await launchTestContract({
-      deployer: GenericTypesContractAbi__factory,
-      bytecode: GenericTypesContractAbiHex,
+    const contract = await setup({
+      abi: abiJSON,
+      contractBytecode,
     });
 
     const b256 = '0xd5579c46dfcc7f18207013e65b44e4cb4e2c2298f4ac457ba8f82743f31e930b';

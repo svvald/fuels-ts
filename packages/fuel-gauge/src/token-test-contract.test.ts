@@ -1,33 +1,41 @@
 import { ErrorCode, FuelError } from '@fuel-ts/errors';
 import type { AssetId, BN } from 'fuels';
-import { toHex, Wallet, bn } from 'fuels';
-import { expectToThrowFuelError, launchTestNode } from 'fuels/test-utils';
+import { toHex, Provider, Wallet, ContractFactory, bn, FUEL_NETWORK_URL } from 'fuels';
+import { expectToThrowFuelError, generateTestWallet } from 'fuels/test-utils';
 
-import { TokenContractAbi__factory } from '../test/typegen';
-import TokenContractAbiHex from '../test/typegen/contracts/TokenContractAbi.hex';
+import { FuelGaugeProjectsEnum, getFuelGaugeForcProject } from '../test/fixtures';
+
+const { binHexlified: bytecode, abiContents: abi } = getFuelGaugeForcProject(
+  FuelGaugeProjectsEnum.TOKEN_CONTRACT
+);
+
+let provider: Provider;
+let baseAssetId: string;
+
+const setup = async () => {
+  // Create wallet
+  const wallet = await generateTestWallet(provider, [[5_000_000, baseAssetId]]);
+
+  // Deploy contract
+  const factory = new ContractFactory(bytecode, abi, wallet);
+  const { waitForResult } = await factory.deployContract();
+  const { contract } = await waitForResult();
+  return contract;
+};
+
+beforeAll(async () => {
+  provider = await Provider.create(FUEL_NETWORK_URL);
+  baseAssetId = provider.getBaseAssetId();
+});
+
 /**
  * @group node
- * @group browser
  */
-
 describe('TokenTestContract', () => {
   it('Can mint and transfer coins', async () => {
     // New wallet to transfer coins and check balance
-    using launched = await launchTestNode({
-      contractsConfigs: [
-        {
-          deployer: TokenContractAbi__factory,
-          bytecode: TokenContractAbiHex,
-        },
-      ],
-    });
-
-    const {
-      provider,
-      contracts: [token],
-    } = launched;
-
     const userWallet = Wallet.generate({ provider });
+    const token = await setup();
     const tokenContractId = { bits: token.id.toB256() };
     const addressId = { bits: userWallet.address.toB256() };
 
@@ -63,26 +71,15 @@ describe('TokenTestContract', () => {
   });
 
   it('Automatically add variableOuputs', async () => {
-    using launched = await launchTestNode({
-      contractsConfigs: [
-        {
-          deployer: TokenContractAbi__factory,
-          bytecode: TokenContractAbiHex,
-        },
-      ],
-      walletsConfig: {
-        count: 3,
-      },
-    });
-
-    const {
-      wallets: [wallet1, wallet2, wallet3],
-      contracts: [token],
-    } = launched;
+    const [wallet1, wallet2, wallet3] = Array.from({ length: 3 }, () =>
+      Wallet.generate({ provider })
+    );
 
     const addresses = [wallet1, wallet2, wallet3].map((wallet) => ({
       bits: wallet.address.toB256(),
     }));
+
+    const token = await setup();
 
     const functionCallOne = token.functions.mint_to_addresses(addresses, 10);
     await functionCallOne.dryRun();
@@ -138,20 +135,8 @@ describe('TokenTestContract', () => {
   });
 
   it('Contract getBalance', async () => {
-    using launched = await launchTestNode({
-      contractsConfigs: [
-        {
-          deployer: TokenContractAbi__factory,
-          bytecode: TokenContractAbiHex,
-        },
-      ],
-    });
-
-    const {
-      wallets: [userWallet],
-      contracts: [token],
-    } = launched;
-
+    const userWallet = Wallet.generate({ provider });
+    const token = await setup();
     const addressId = {
       bits: userWallet.address.toB256(),
     };
@@ -168,35 +153,19 @@ describe('TokenTestContract', () => {
     expect((await getBalance()).toHex()).toEqual(bn(100).toHex());
 
     // transfer 50 coins to user wallet
-    const { waitForResult: waitForResult2 } = await token.functions
-      .transfer_to_address(addressId, assetId, 50)
-      .call();
-    await waitForResult2();
+    await token.functions.transfer_to_address(addressId, assetId, 50).call();
 
     // the contract should now have only 50 coins
     expect((await getBalance()).toHex()).toEqual(bn(50).toHex());
   });
 
   it('throws when passing entire Address object as address parameter', async () => {
-    using launched = await launchTestNode({
-      contractsConfigs: [
-        {
-          deployer: TokenContractAbi__factory,
-          bytecode: TokenContractAbiHex,
-        },
-      ],
-    });
-
-    const {
-      provider,
-      wallets: [userWallet],
-      contracts: [token],
-    } = launched;
-
+    const userWallet = Wallet.generate({ provider });
+    const token = await setup();
     const addressParameter = {
       bits: userWallet.address,
     };
-    const assetId: AssetId = { bits: provider.getBaseAssetId() };
+    const assetId: AssetId = { bits: baseAssetId };
 
     await expectToThrowFuelError(
       () => token.functions.transfer_to_address(addressParameter, assetId, 50).call(),

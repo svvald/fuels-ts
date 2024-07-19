@@ -1,8 +1,8 @@
 import { bn, toHex } from 'fuels';
-import type { BN, BigNumberish, WalletUnlocked } from 'fuels';
+import type { BN, BigNumberish, WalletLocked } from 'fuels';
 
 export const assertBalances = async (
-  receiver: WalletUnlocked,
+  receiver: WalletLocked,
   initialReceiverBalance: BN,
   amountToReceiver: BigNumberish
 ): Promise<void> => {

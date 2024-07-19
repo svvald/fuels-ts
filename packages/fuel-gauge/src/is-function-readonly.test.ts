@@ -1,21 +1,13 @@
-import { StorageTestContractAbi__factory } from '../test/typegen/contracts';
-import StorageTestContractAbiHex from '../test/typegen/contracts/StorageTestContractAbi.hex';
+import { FuelGaugeProjectsEnum } from '../test/fixtures';
 
-import { launchTestContract } from './utils';
+import { getSetupContract } from './utils';
 
-function setupContract() {
-  return launchTestContract({
-    deployer: StorageTestContractAbi__factory,
-    bytecode: StorageTestContractAbiHex,
-  });
-}
 /**
  * @group node
- * @group browser
  */
 describe('isReadOnly', () => {
   test('isReadOnly returns true for a read-only function', async () => {
-    using contract = await setupContract();
+    const contract = await getSetupContract(FuelGaugeProjectsEnum.STORAGE_TEST_CONTRACT)();
 
     const isReadOnly = contract.functions.counter.isReadOnly();
 
@@ -23,7 +15,7 @@ describe('isReadOnly', () => {
   });
 
   test('isReadOnly returns false for a function containing write operations', async () => {
-    using contract = await setupContract();
+    const contract = await getSetupContract(FuelGaugeProjectsEnum.STORAGE_TEST_CONTRACT)();
 
     const isReadOnly = contract.functions.increment_counter.isReadOnly();
 
@@ -31,7 +23,7 @@ describe('isReadOnly', () => {
   });
 
   test('isReadOnly does not throw a runtime error for a function that does not use storage', async () => {
-    using contract = await setupContract();
+    const contract = await getSetupContract(FuelGaugeProjectsEnum.STORAGE_TEST_CONTRACT)();
 
     const isReadOnly = contract.functions.return_true.isReadOnly();
 

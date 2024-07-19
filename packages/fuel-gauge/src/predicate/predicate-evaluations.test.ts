@@ -10,7 +10,6 @@ import { assertBalances, fundPredicate } from './utils/predicate';
 
 /**
  * @group node
- * @group browser
  */
 describe('Predicate', () => {
   describe('Evaluations', () => {
@@ -22,7 +21,7 @@ describe('Predicate', () => {
         provider,
       } = launched;
 
-      const receiver = Wallet.generate({ provider });
+      const receiver = Wallet.fromAddress(Address.fromRandom(), provider);
       const initialReceiverBalance = await receiver.getBalance();
 
       const predicate = PredicateTrueAbi__factory.createInstance(provider);

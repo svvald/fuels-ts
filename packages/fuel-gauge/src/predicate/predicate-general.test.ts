@@ -1,18 +1,26 @@
 import type { BN, FakeResources } from 'fuels';
-import { Address, Predicate, ScriptTransactionRequest, bn } from 'fuels';
-import { ASSET_A, ASSET_B, launchTestNode } from 'fuels/test-utils';
+import {
+  Address,
+  FUEL_NETWORK_URL,
+  Predicate,
+  Provider,
+  ScriptTransactionRequest,
+  bn,
+} from 'fuels';
+import { ASSET_A, ASSET_B } from 'fuels/test-utils';
 
-import { PredicateSumAbi__factory } from '../../test/typegen';
+import { FuelGaugeProjectsEnum, getFuelGaugeForcProject } from '../../test/fixtures';
 
 /**
  * @group node
- * @group browser
  */
 describe('Predicate', () => {
   it('can generate and use fake predicate coins', async () => {
-    using launched = await launchTestNode();
-
-    const { provider } = launched;
+    const provider = await Provider.create(FUEL_NETWORK_URL);
+    const baseAssetId = provider.getBaseAssetId();
+    const { binHexlified, abiContents } = getFuelGaugeForcProject(
+      FuelGaugeProjectsEnum.PREDICATE_SUM
+    );
 
     const amount1 = bn(500_000);
     const amount2 = bn(200_000);
@@ -20,7 +28,7 @@ describe('Predicate', () => {
     const amountToTransferBaseAsset = bn(1000);
 
     const fakeCoinsConfig: FakeResources[] = [
-      { amount: amount1, assetId: provider.getBaseAssetId() },
+      { amount: amount1, assetId: baseAssetId },
       { amount: amount2, assetId: ASSET_A },
       { amount: amount3, assetId: ASSET_B },
     ];
@@ -29,8 +37,8 @@ describe('Predicate', () => {
     const value1 = bn(100);
 
     const predicate = new Predicate<[BN, BN]>({
-      bytecode: PredicateSumAbi__factory.bin,
-      abi: PredicateSumAbi__factory.abi,
+      bytecode: binHexlified,
+      abi: abiContents,
       provider,
       inputData: [value1, value2],
     });
@@ -48,11 +56,7 @@ describe('Predicate', () => {
     });
 
     request.addResources(fakeCoins);
-    request.addCoinOutput(
-      Address.fromRandom(),
-      amountToTransferBaseAsset,
-      provider.getBaseAssetId()
-    );
+    request.addCoinOutput(Address.fromRandom(), amountToTransferBaseAsset, baseAssetId);
     request.addCoinOutput(Address.fromRandom(), amount2, ASSET_A);
     request.addCoinOutput(Address.fromRandom(), amount3, ASSET_B);
 

@@ -1,30 +1,35 @@
 import { ErrorCode, FuelError } from '@fuel-ts/errors';
-import { expectToThrowFuelError } from '@fuel-ts/errors/test-utils';
-import type { TransactionResultReceipt } from 'fuels';
-import { bn, getRandomB256, ContractFactory } from 'fuels';
-import { launchTestNode } from 'fuels/test-utils';
+import type { Contract, WalletUnlocked, TransactionResultReceipt } from 'fuels';
+import { bn, ContractFactory, Provider, FUEL_NETWORK_URL, getRandomB256 } from 'fuels';
+import { expectToThrowFuelError, generateTestWallet } from 'fuels/test-utils';
 
-import { RevertErrorAbi__factory, TokenContractAbi__factory } from '../test/typegen/contracts';
-import RevertErrorAbiHex from '../test/typegen/contracts/RevertErrorAbi.hex';
-import TokenContractAbiHex from '../test/typegen/contracts/TokenContractAbi.hex';
+import { FuelGaugeProjectsEnum, getFuelGaugeForcProject } from '../test/fixtures';
 
-import { launchTestContract } from './utils';
-
-function launchContract() {
-  return launchTestContract({
-    deployer: RevertErrorAbi__factory,
-    bytecode: RevertErrorAbiHex,
-  });
-}
+let contractInstance: Contract;
+let wallet: WalletUnlocked;
 
 /**
  * @group node
- * @group browser
  */
 describe('Revert Error Testing', () => {
-  it('can pass require checks [valid]', async () => {
-    using contractInstance = await launchContract();
+  let provider: Provider;
+  let baseAssetId: string;
 
+  beforeAll(async () => {
+    provider = await Provider.create(FUEL_NETWORK_URL);
+    baseAssetId = provider.getBaseAssetId();
+    wallet = await generateTestWallet(provider, [[1_000_000, baseAssetId]]);
+
+    const { binHexlified: bytecode, abiContents: FactoryAbi } = getFuelGaugeForcProject(
+      FuelGaugeProjectsEnum.REVERT_ERROR
+    );
+
+    const factory = new ContractFactory(bytecode, FactoryAbi, wallet);
+    const { waitForResult } = await factory.deployContract();
+    ({ contract: contractInstance } = await waitForResult());
+  });
+
+  it('can pass require checks [valid]', async () => {
     const INPUT_PRICE = bn(10);
     const INPUT_TOKEN_ID = bn(100);
 
@@ -45,8 +50,6 @@ describe('Revert Error Testing', () => {
   });
 
   it('should throw for "require" revert TX [PriceCantBeZero]', async () => {
-    using contractInstance = await launchContract();
-
     const INPUT_PRICE = bn(0);
     const INPUT_TOKEN_ID = bn(100);
 
@@ -67,8 +70,6 @@ describe('Revert Error Testing', () => {
   });
 
   it('should throw for "require" revert TX [InvalidTokenId]', async () => {
-    using contractInstance = await launchContract();
-
     const INPUT_PRICE = bn(10);
     const INPUT_TOKEN_ID = bn(55);
 
@@ -94,8 +95,6 @@ describe('Revert Error Testing', () => {
   });
 
   it('should throw for revert TX with reason "TransferZeroCoins"', async () => {
-    using contractInstance = await launchContract();
-
     await expectToThrowFuelError(
       () => contractInstance.functions.failed_transfer_revert().call(),
       new FuelError(
@@ -113,8 +112,6 @@ describe('Revert Error Testing', () => {
   });
 
   it('should throw for "assert" revert TX', async () => {
-    using contractInstance = await launchContract();
-
     const INPUT_PRICE = bn(100);
     const INPUT_TOKEN_ID = bn(100);
 
@@ -135,8 +132,6 @@ describe('Revert Error Testing', () => {
   });
 
   it('should throw for revert TX with reason "NotEnoughBalance"', async () => {
-    using contractInstance = await launchContract();
-
     await expectToThrowFuelError(
       () => contractInstance.functions.failed_transfer().call(),
       new FuelError(
@@ -154,8 +149,6 @@ describe('Revert Error Testing', () => {
   });
 
   it('should throw for "assert_eq" revert TX', async () => {
-    using contractInstance = await launchContract();
-
     await expectToThrowFuelError(
       () => contractInstance.functions.assert_value_eq_10(9).call(),
       new FuelError(
@@ -173,8 +166,6 @@ describe('Revert Error Testing', () => {
   });
 
   it('should throw for "assert_ne" revert TX', async () => {
-    using contractInstance = await launchContract();
-
     await expectToThrowFuelError(
       () => contractInstance.functions.assert_value_ne_5(5).call(),
       new FuelError(
@@ -192,14 +183,11 @@ describe('Revert Error Testing', () => {
   });
 
   it('should throw for a missing OutputChange', async () => {
-    using launched = await launchTestNode();
+    const { binHexlified: tokenBytecode, abiContents: tokenAbi } = getFuelGaugeForcProject(
+      FuelGaugeProjectsEnum.TOKEN_CONTRACT
+    );
 
-    const {
-      wallets: [wallet],
-      provider,
-    } = launched;
-
-    const factory = new ContractFactory(TokenContractAbiHex, TokenContractAbi__factory.abi, wallet);
+    const factory = new ContractFactory(tokenBytecode, tokenAbi, wallet);
     const { waitForResult } = await factory.deployContract();
     const { contract: tokenContract } = await waitForResult();
 
@@ -244,8 +232,6 @@ describe('Revert Error Testing', () => {
   });
 
   it('should throw UNKNOWN Error for revert', async () => {
-    using contractInstance = await launchContract();
-
     await expectToThrowFuelError(
       () => contractInstance.functions.revert_with_0().call(),
       new FuelError(ErrorCode.UNKNOWN, `The transaction reverted with an unknown reason: 0`, {
@@ -259,8 +245,6 @@ describe('Revert Error Testing', () => {
   });
 
   it('should ensure errors from getTransactionCost dry-run are properly thrown', async () => {
-    using contractInstance = await launchContract();
-
     await expectToThrowFuelError(
       () => contractInstance.functions.assert_value_ne_5(5).getTransactionCost(),
       new FuelError(

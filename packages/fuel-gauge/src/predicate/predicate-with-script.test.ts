@@ -1,34 +1,39 @@
-import type { BigNumberish } from 'fuels';
-import { toNumber, Script, Predicate, Wallet } from 'fuels';
-import { launchTestNode } from 'fuels/test-utils';
+import type { BigNumberish, WalletUnlocked } from 'fuels';
+import { toNumber, Script, Provider, Predicate, FUEL_NETWORK_URL } from 'fuels';
+import { generateTestWallet, seedTestWallet } from 'fuels/test-utils';
 
-import {
-  PredicateMainArgsStructAbi__factory,
-  ScriptMainArgsAbi__factory,
-} from '../../test/typegen';
+import { FuelGaugeProjectsEnum, getFuelGaugeForcProject } from '../../test/fixtures';
 import type { Validation } from '../types/predicate';
-
-import { fundPredicate } from './utils/predicate';
 
 /**
  * @group node
- * @group browser
  */
 describe('Predicate', () => {
+  const { binHexlified: scriptBytes, abiContents: scriptAbi } = getFuelGaugeForcProject(
+    FuelGaugeProjectsEnum.SCRIPT_MAIN_ARGS
+  );
+
+  const { binHexlified: predicateBytesStruct, abiContents: predicateAbiMainArgsStruct } =
+    getFuelGaugeForcProject(FuelGaugeProjectsEnum.PREDICATE_MAIN_ARGS_STRUCT);
+
   describe('With script', () => {
+    let wallet: WalletUnlocked;
+    let receiver: WalletUnlocked;
+    let provider: Provider;
+
+    let baseAssetId: string;
+    beforeAll(async () => {
+      provider = await Provider.create(FUEL_NETWORK_URL);
+      baseAssetId = provider.getBaseAssetId();
+      wallet = await generateTestWallet(provider, [[10_000_000, baseAssetId]]);
+      receiver = await generateTestWallet(provider);
+    });
+
     it('calls a predicate and uses proceeds for a script call', async () => {
-      using launched = await launchTestNode();
-      const {
-        provider,
-        wallets: [wallet],
-      } = launched;
-
-      const receiver = Wallet.generate({ provider });
-
       const initialReceiverBalance = toNumber(await receiver.getBalance());
       const scriptInstance = new Script<BigNumberish[], BigNumberish>(
-        ScriptMainArgsAbi__factory.bin,
-        ScriptMainArgsAbi__factory.abi,
+        scriptBytes,
+        scriptAbi,
         wallet
       );
 
@@ -44,9 +49,9 @@ describe('Predicate', () => {
       const amountToPredicate = 900_000;
       const amountToReceiver = 100_000;
       const predicate = new Predicate<[Validation]>({
-        bytecode: PredicateMainArgsStructAbi__factory.bin,
+        bytecode: predicateBytesStruct,
         provider,
-        abi: PredicateMainArgsStructAbi__factory.abi,
+        abi: predicateAbiMainArgsStruct,
         inputData: [
           {
             has_account: true,
@@ -55,17 +60,12 @@ describe('Predicate', () => {
         ],
       });
 
-      await fundPredicate(wallet, predicate, amountToPredicate);
+      await seedTestWallet(predicate, [[amountToPredicate, baseAssetId]], 3);
 
       // executing predicate to transfer resources to receiver
-      const tx = await predicate.transfer(
-        receiver.address,
-        amountToReceiver,
-        provider.getBaseAssetId(),
-        {
-          gasLimit: 1000,
-        }
-      );
+      const tx = await predicate.transfer(receiver.address, amountToReceiver, baseAssetId, {
+        gasLimit: 1000,
+      });
 
       const { isStatusSuccess } = await tx.waitForResult();
       expect(isStatusSuccess).toBeTruthy();

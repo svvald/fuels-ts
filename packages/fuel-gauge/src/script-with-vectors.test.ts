@@ -1,26 +1,27 @@
-import { launchTestNode } from 'fuels/test-utils';
+import type { BigNumberish } from 'fuels';
+import { FUEL_NETWORK_URL, Provider } from 'fuels';
+import { generateTestWallet } from 'fuels/test-utils';
 
-import {
-  ScriptWithArrayAbi__factory,
-  ScriptWithVectorAbi__factory,
-  ScriptWithVectorAdvancedAbi__factory,
-  ScriptWithVectorMixedAbi__factory,
-} from '../test/typegen';
+import { getScript } from './utils';
+
+const setup = async (balance = 500_000) => {
+  const provider = await Provider.create(FUEL_NETWORK_URL);
+  const baseAssetId = provider.getBaseAssetId();
+
+  // Create wallet
+  const wallet = await generateTestWallet(provider, [[balance, baseAssetId]]);
+
+  return wallet;
+};
 
 /**
  * @group node
- * @group browser
  */
 describe('Script With Vectors', () => {
   it('can call script and use main argument [array]', async () => {
-    using launched = await launchTestNode();
-
-    const {
-      wallets: [wallet],
-    } = launched;
-
+    const wallet = await setup();
     const someArray = [1, 100];
-    const scriptInstance = ScriptWithArrayAbi__factory.createInstance(wallet);
+    const scriptInstance = getScript<[BigNumberish[]], void>('script-with-array', wallet);
 
     const { waitForResult } = await scriptInstance.functions.main(someArray).call();
     const { logs } = await waitForResult();
@@ -29,14 +30,9 @@ describe('Script With Vectors', () => {
   });
 
   it('can call script and use main argument [vec]', async () => {
-    using launched = await launchTestNode();
-
-    const {
-      wallets: [wallet],
-    } = launched;
-
+    const wallet = await setup();
     const someVec = [7, 2, 1, 5];
-    const scriptInstance = ScriptWithVectorAbi__factory.createInstance(wallet);
+    const scriptInstance = getScript<[BigNumberish[]], void>('script-with-vector', wallet);
 
     const scriptInvocationScope = scriptInstance.functions.main(someVec);
 
@@ -59,11 +55,7 @@ describe('Script With Vectors', () => {
   });
 
   it('can call script and use main argument [struct in vec in struct in vec in struct in vec]', async () => {
-    using launched = await launchTestNode();
-
-    const {
-      wallets: [wallet],
-    } = launched;
+    const wallet = await setup();
 
     const importantDates = [
       {
@@ -95,7 +87,8 @@ describe('Script With Vectors', () => {
       },
     ];
 
-    const scriptInstance = ScriptWithVectorMixedAbi__factory.createInstance(wallet);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const scriptInstance = getScript<[any], void>('script-with-vector-mixed', wallet);
 
     const { waitForResult } = await scriptInstance.functions.main(importantDates).call();
     const { value } = await waitForResult();
@@ -103,11 +96,7 @@ describe('Script With Vectors', () => {
   });
 
   it('can call script and use main argument [struct in vec in struct in vec in struct in vec]', async () => {
-    using launched = await launchTestNode();
-
-    const {
-      wallets: [wallet],
-    } = launched;
+    const wallet = await setup();
 
     const scores = [24, 56, 43];
 
@@ -166,7 +155,8 @@ describe('Script With Vectors', () => {
       },
     ];
 
-    const scriptInstance = ScriptWithVectorAdvancedAbi__factory.createInstance(wallet);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const scriptInstance = getScript<[any[]], void>('script-with-vector-advanced', wallet);
 
     const { waitForResult } = await scriptInstance.functions.main(vectorOfStructs).call();
     const { value } = await waitForResult();

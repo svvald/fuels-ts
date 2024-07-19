@@ -1,15 +1,20 @@
 import type { Contract } from 'fuels';
 import { BN, bn, toHex } from 'fuels';
-import { ASSET_A } from 'fuels/test-utils';
+import { ASSET_A, launchTestNode } from 'fuels/test-utils';
 
 import { CallTestContractAbi__factory } from '../test/typegen/contracts';
 import bytecode from '../test/typegen/contracts/CallTestContractAbi.hex';
 
-import { launchTestContract } from './utils';
+const setupContract = async () => {
+  const {
+    contracts: [contract],
+    cleanup,
+  } = await launchTestNode({
+    contractsConfigs: [{ deployer: CallTestContractAbi__factory, bytecode }],
+  });
+  return Object.assign(contract, { [Symbol.dispose]: cleanup });
+};
 
-function setupContract() {
-  return launchTestContract({ deployer: CallTestContractAbi__factory, bytecode });
-}
 const U64_MAX = bn(2).pow(64).sub(1);
 
 /**

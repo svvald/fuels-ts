@@ -1,34 +1,46 @@
 import type { Account, TransactionResult } from '@fuel-ts/account';
 import { FuelError, ErrorCode } from '@fuel-ts/errors';
-import { expectToThrowFuelError } from '@fuel-ts/errors/test-utils';
-import { BN, bn, toHex, Interface, ContractFactory } from 'fuels';
-import { launchTestNode } from 'fuels/test-utils';
+import { BN, bn, toHex, Interface, Provider, ContractFactory, FUEL_NETWORK_URL } from 'fuels';
+import { generateTestWallet, expectToThrowFuelError } from 'fuels/test-utils';
 
-import { StorageTestContractAbi__factory } from '../test/typegen/contracts';
-import StorageTestContractAbiHex from '../test/typegen/contracts/StorageTestContractAbi.hex';
-
-import { launchTestContract } from './utils';
+import { FuelGaugeProjectsEnum, getFuelGaugeForcProject } from '../test/fixtures';
 
 /**
  * @group node
- * @group browser
  */
 describe('Contract Factory', () => {
+  let baseAssetId: string;
+
+  const {
+    binHexlified: byteCode,
+    abiContents: abi,
+    storageSlots,
+  } = getFuelGaugeForcProject(FuelGaugeProjectsEnum.STORAGE_TEST_CONTRACT);
+
+  const createContractFactory = async () => {
+    const provider = await Provider.create(FUEL_NETWORK_URL);
+    baseAssetId = provider.getBaseAssetId();
+    const wallet = await generateTestWallet(provider, [[5_000_000, baseAssetId]]);
+
+    // send byteCode and ABI to ContractFactory to load
+    const factory = new ContractFactory(byteCode, abi, wallet);
+    return factory;
+  };
+
   it('Creates a factory from inputs that can return call results', async () => {
-    using contract = await launchTestContract({
-      deployer: StorageTestContractAbi__factory,
-      bytecode: StorageTestContractAbiHex,
-    });
+    const factory = await createContractFactory();
+
+    const { waitForResult } = await factory.deployContract();
+    const { contract } = await waitForResult();
+
     expect(contract.interface).toBeInstanceOf(Interface);
 
-    const { waitForResult } = await contract.functions.initialize_counter(41).call();
-    const { value: valueInitial } = await waitForResult();
+    const call1 = await contract.functions.initialize_counter(41).call();
+    const { value: valueInitial } = await call1.waitForResult();
     expect(valueInitial.toHex()).toEqual(toHex(41));
 
-    const { waitForResult: waitForNextResult } = await contract.functions
-      .increment_counter(1)
-      .call();
-    const { value } = await waitForNextResult();
+    const call2 = await contract.functions.increment_counter(1).call();
+    const { value } = await call2.waitForResult();
     expect(value.toHex()).toEqual(toHex(42));
 
     const { value: value2 } = await contract.functions.increment_counter(1).dryRun();
@@ -36,10 +48,10 @@ describe('Contract Factory', () => {
   });
 
   it('Creates a factory from inputs that can return transaction results', async () => {
-    using contract = await launchTestContract({
-      deployer: StorageTestContractAbi__factory,
-      bytecode: StorageTestContractAbiHex,
-    });
+    const factory = await createContractFactory();
+
+    const callDeploy = await factory.deployContract();
+    const { contract } = await callDeploy.waitForResult();
 
     expect(contract.interface).toBeInstanceOf(Interface);
 
@@ -84,10 +96,10 @@ describe('Contract Factory', () => {
   });
 
   it('Creates a factory from inputs that can prepare call data', async () => {
-    using contract = await launchTestContract({
-      deployer: StorageTestContractAbi__factory,
-      bytecode: StorageTestContractAbiHex,
-    });
+    const factory = await createContractFactory();
+
+    const { waitForResult } = await factory.deployContract();
+    const { contract } = await waitForResult();
 
     const prepared = contract.functions.increment_counter(1).getCallConfig();
     expect(prepared).toEqual({
@@ -102,17 +114,9 @@ describe('Contract Factory', () => {
   });
 
   it('should not override user input maxFee when calling deployContract', async () => {
-    using launched = await launchTestNode();
-    const {
-      wallets: [wallet],
-    } = launched;
-
+    const factory = await createContractFactory();
     const setFee = bn(120_000);
-    const factory = new ContractFactory(
-      StorageTestContractAbiHex,
-      StorageTestContractAbi__factory.abi,
-      wallet
-    );
+
     const spy = vi.spyOn(factory.account as Account, 'sendTransaction');
 
     await factory.deployContract({
@@ -127,11 +131,11 @@ describe('Contract Factory', () => {
   });
 
   it('Creates a contract with initial storage fixed var names', async () => {
-    using contract = await launchTestContract({
-      deployer: StorageTestContractAbi__factory,
-      bytecode: StorageTestContractAbiHex,
-      storageSlots: StorageTestContractAbi__factory.storageSlots,
+    const factory = await createContractFactory();
+    const { waitForResult } = await factory.deployContract({
+      storageSlots,
     });
+    const { contract } = await waitForResult();
 
     const call1 = await contract.functions.return_var1().call();
     const { value: var1 } = await call1.waitForResult();
@@ -160,16 +164,7 @@ describe('Contract Factory', () => {
   });
 
   it('Creates a contract with initial storage (dynamic key)', async () => {
-    using launched = await launchTestNode();
-    const {
-      wallets: [wallet],
-    } = launched;
-
-    const factory = new ContractFactory(
-      StorageTestContractAbiHex,
-      StorageTestContractAbi__factory.abi,
-      wallet
-    );
+    const factory = await createContractFactory();
     const b256 = '0x626f0c36909faecc316056fca8be684ab0cd06afc63247dc008bdf9e433f927a';
 
     const { waitForResult } = await factory.deployContract({
@@ -184,21 +179,12 @@ describe('Contract Factory', () => {
   });
 
   it('Creates a contract with initial storage. Both dynamic key and fixed vars', async () => {
-    using launched = await launchTestNode();
-    const {
-      wallets: [wallet],
-    } = launched;
-
-    const factory = new ContractFactory(
-      StorageTestContractAbiHex,
-      StorageTestContractAbi__factory.abi,
-      wallet
-    );
+    const factory = await createContractFactory();
     const b256 = '0x626f0c36909faecc316056fca8be684ab0cd06afc63247dc008bdf9e433f927a';
 
     const { waitForResult } = await factory.deployContract({
       storageSlots: [
-        ...StorageTestContractAbi__factory.storageSlots, // initializing from storage_slots.json
+        ...storageSlots, // initializing from storage_slots.json
         { key: '0000000000000000000000000000000000000000000000000000000000000001', value: b256 }, // Initializing manual value
       ],
     });
@@ -234,10 +220,7 @@ describe('Contract Factory', () => {
   });
 
   it('should throws if calls createTransactionRequest is called when provider is not set', async () => {
-    const factory = new ContractFactory(
-      StorageTestContractAbiHex,
-      StorageTestContractAbi__factory.abi
-    );
+    const factory = new ContractFactory(byteCode, abi);
 
     await expectToThrowFuelError(
       () => factory.createTransactionRequest(),

@@ -1,29 +1,34 @@
 import { FuelError } from '@fuel-ts/errors';
-import { expectToThrowFuelError } from '@fuel-ts/errors/test-utils';
 import type { Account, CoinTransactionRequestInput } from 'fuels';
-import { ScriptTransactionRequest, Wallet, bn } from 'fuels';
-import { launchTestNode } from 'fuels/test-utils';
+import { FUEL_NETWORK_URL, Provider, ScriptTransactionRequest, Wallet, bn } from 'fuels';
+import { expectToThrowFuelError, seedTestWallet } from 'fuels/test-utils';
 
 /**
  * @group node
- * @group browser
  */
-describe('Funding Transactions', () => {
+describe(__filename, () => {
+  let mainWallet: Account;
+  let provider: Provider;
+  let baseAssetId: string;
+
   const assetA = '0x0101010101010101010101010101010101010101010101010101010101010101';
   const assetB = '0x0202020202020202020202020202020202020202020202020202020202020202';
+
+  beforeAll(async () => {
+    provider = await Provider.create(FUEL_NETWORK_URL);
+    baseAssetId = provider.getBaseAssetId();
+    mainWallet = Wallet.generate({ provider });
+    await seedTestWallet(mainWallet, [[200_000_000, baseAssetId]]);
+  });
 
   const fundingTxWithMultipleUTXOs = async ({
     account,
     totalAmount,
     splitIn,
-    baseAssetId,
-    mainWallet,
   }: {
     account: Account;
     totalAmount: number;
     splitIn: number;
-    baseAssetId: string;
-    mainWallet: Account;
   }) => {
     const request = new ScriptTransactionRequest();
 
@@ -46,25 +51,14 @@ describe('Funding Transactions', () => {
   };
 
   it('should successfully fund a transaction request when it is not fully funded', async () => {
-    const initialAmount = 500_000;
-    using launched = await launchTestNode({
-      walletsConfig: {
-        amountPerCoin: initialAmount,
-      },
-    });
+    const sender = Wallet.generate({ provider });
+    const receiver = Wallet.generate({ provider });
 
-    const {
-      provider,
-      wallets: [sender, receiver],
-    } = launched;
-
-    // 1500 splitted in 5 = 5 UTXOs of 30 each
+    // 1500 splitted in 5 = 5 UTXOs of 300 each
     await fundingTxWithMultipleUTXOs({
       account: sender,
       totalAmount: 400_000,
       splitIn: 5,
-      baseAssetId: provider.getBaseAssetId(),
-      mainWallet: sender,
     });
 
     const request = new ScriptTransactionRequest({
@@ -73,7 +67,7 @@ describe('Funding Transactions', () => {
 
     const amountToTransfer = 300;
 
-    request.addCoinOutput(receiver.address, amountToTransfer, provider.getBaseAssetId());
+    request.addCoinOutput(receiver.address, amountToTransfer, baseAssetId);
 
     const txCost = await provider.getTransactionCost(request);
 
@@ -91,19 +85,12 @@ describe('Funding Transactions', () => {
     // fund method should have been called to fetch the remaining UTXOs
     expect(getResourcesToSpendSpy).toHaveBeenCalled();
 
-    const receiverBalance = await receiver.getBalance(provider.getBaseAssetId());
+    const receiverBalance = await receiver.getBalance(baseAssetId);
 
-    expect(receiverBalance.toNumber()).toBe(amountToTransfer + initialAmount);
+    expect(receiverBalance.toNumber()).toBe(amountToTransfer);
   });
 
   it('should not fund a transaction request when it is already funded', async () => {
-    using launched = await launchTestNode();
-
-    const {
-      provider,
-      wallets: [mainWallet],
-    } = launched;
-
     const sender = Wallet.generate({ provider });
     const receiver = Wallet.generate({ provider });
 
@@ -112,12 +99,10 @@ describe('Funding Transactions', () => {
       account: sender,
       totalAmount: 400_000,
       splitIn: 2,
-      baseAssetId: provider.getBaseAssetId(),
-      mainWallet,
     });
 
     // sender has 2 UTXOs for 200_000 each, so it has enough resources to spend 1000 of baseAssetId
-    const enoughtResources = await sender.getResourcesToSpend([[100, provider.getBaseAssetId()]]);
+    const enoughtResources = await sender.getResourcesToSpend([[100, baseAssetId]]);
 
     // confirm we only fetched 1 UTXO from the expected amount
     expect(enoughtResources.length).toBe(1);
@@ -129,7 +114,7 @@ describe('Funding Transactions', () => {
 
     const amountToTransfer = 100;
 
-    request.addCoinOutput(receiver.address, amountToTransfer, provider.getBaseAssetId());
+    request.addCoinOutput(receiver.address, amountToTransfer, baseAssetId);
     request.addResources(enoughtResources);
 
     const txCost = await provider.getTransactionCost(request);
@@ -153,30 +138,19 @@ describe('Funding Transactions', () => {
     // fund should not have been called since the TX request was already funded
     expect(getResourcesToSpendSpy).toHaveBeenCalledTimes(0);
 
-    const receiverBalance = await receiver.getBalance(provider.getBaseAssetId());
+    const receiverBalance = await receiver.getBalance(baseAssetId);
 
     expect(receiverBalance.toNumber()).toBe(amountToTransfer);
   });
 
   it('should fully fund a transaction when it is has no funds yet', async () => {
-    const initialAmount = 500_000;
-    using launched = await launchTestNode({
-      walletsConfig: {
-        amountPerCoin: initialAmount,
-      },
-    });
-
-    const {
-      provider,
-      wallets: [sender, receiver],
-    } = launched;
+    const sender = Wallet.generate({ provider });
+    const receiver = Wallet.generate({ provider });
 
     await fundingTxWithMultipleUTXOs({
       account: sender,
       totalAmount: 200_000,
       splitIn: 1,
-      baseAssetId: provider.getBaseAssetId(),
-      mainWallet: sender,
     });
 
     const request = new ScriptTransactionRequest({
@@ -184,7 +158,7 @@ describe('Funding Transactions', () => {
     });
 
     const amountToTransfer = 1000;
-    request.addCoinOutput(receiver.address, amountToTransfer, provider.getBaseAssetId());
+    request.addCoinOutput(receiver.address, amountToTransfer, baseAssetId);
 
     const txCost = await provider.getTransactionCost(request);
 
@@ -205,23 +179,14 @@ describe('Funding Transactions', () => {
     // fund method should have been called to fetch UTXOs
     expect(getResourcesToSpendSpy).toHaveBeenCalledTimes(1);
 
-    const receiverBalance = await receiver.getBalance(provider.getBaseAssetId());
+    const receiverBalance = await receiver.getBalance(baseAssetId);
 
-    expect(receiverBalance.toNumber()).toBe(amountToTransfer + initialAmount);
+    expect(receiverBalance.toNumber()).toBe(amountToTransfer);
   });
 
   it('should ensure proper error is thrown when user has not enough resources', async () => {
-    const initialAmount = 100_000;
-    using launched = await launchTestNode({
-      walletsConfig: {
-        amountPerCoin: initialAmount,
-      },
-    });
-
-    const {
-      provider,
-      wallets: [sender, receiver],
-    } = launched;
+    const sender = Wallet.generate({ provider });
+    const receiver = Wallet.generate({ provider });
 
     const splitIn = 20;
 
@@ -233,14 +198,12 @@ describe('Funding Transactions', () => {
       account: sender,
       totalAmount: 2400,
       splitIn,
-      baseAssetId: provider.getBaseAssetId(),
-      mainWallet: sender,
     });
 
     const request = new ScriptTransactionRequest();
 
     const amountToTransfer = 1000;
-    request.addCoinOutput(receiver.address, amountToTransfer, provider.getBaseAssetId());
+    request.addCoinOutput(receiver.address, amountToTransfer, baseAssetId);
 
     const txCost = await provider.getTransactionCost(request);
 
@@ -273,13 +236,6 @@ describe('Funding Transactions', () => {
   });
 
   it('should ensure a partially funded Transaction will require only missing funds', async () => {
-    using launched = await launchTestNode();
-
-    const {
-      provider,
-      wallets: [wallet],
-    } = launched;
-
     const receiver = Wallet.generate({ provider });
     const wallet1 = Wallet.generate({ provider });
     const wallet2 = Wallet.generate({ provider });
@@ -293,14 +249,16 @@ describe('Funding Transactions', () => {
      * Funding wallet1 with only half of the required amount in Asset A and with enough amount
      * in the Base Asset to pay the fee
      */
-    await wallet.transfer(wallet1.address, totalInBaseAsset, provider.getBaseAssetId());
-    await wallet.transfer(wallet1.address, partiallyInAssetA, assetA);
+    await seedTestWallet(wallet1, [
+      [totalInBaseAsset, baseAssetId],
+      [partiallyInAssetA, assetA],
+    ]);
 
     /**
      * Funding wallet2 with the remaining amount needed in Asset A.
      * Note: This wallet does not have any additional funds to pay for the transaction fee.
      */
-    await wallet.transfer(wallet2.address, totalInAssetA - partiallyInAssetA, assetA);
+    await seedTestWallet(wallet2, [[partiallyInAssetA, assetA]]);
 
     let transactionRequest = new ScriptTransactionRequest();
 
@@ -316,12 +274,10 @@ describe('Funding Transactions', () => {
     // Manually fetching resources from wallet1 to be added to transactionRequest
     const partiallyResources = await wallet1.getResourcesToSpend([
       [partiallyInAssetA, assetA],
-      [totalInBaseAsset, provider.getBaseAssetId()],
+      [totalInBaseAsset, baseAssetId],
     ]);
 
-    const baseAssetResource = partiallyResources.find(
-      (r) => r.assetId === provider.getBaseAssetId()
-    );
+    const baseAssetResource = partiallyResources.find((r) => r.assetId === baseAssetId);
     const assetAResource = partiallyResources.find((r) => r.assetId === assetA);
 
     // Expect to have the correct amount of resources, not enough to cover the required amount in Asset A
@@ -350,14 +306,16 @@ describe('Funding Transactions', () => {
   });
 
   it('should ensure a funded Transaction will not require more funds from another user', async () => {
-    using launched = await launchTestNode();
-    const {
-      provider,
-      wallets: [fundedWallet],
-    } = launched;
-
-    const unfundedWallet = Wallet.generate({ provider });
     const receiver = Wallet.generate({ provider });
+    const fundedWallet = Wallet.generate({ provider });
+    const unfundedWallet = Wallet.generate({ provider });
+
+    // Funding the wallet with sufficient amounts for base and additional assets
+    await seedTestWallet(fundedWallet, [
+      [300_000, baseAssetId],
+      [80_000, assetA],
+      [80_000, assetB],
+    ]);
 
     let transactionRequest = new ScriptTransactionRequest();
 
@@ -365,7 +323,7 @@ describe('Funding Transactions', () => {
      * Adding CoinOutputs for the receiver address. All required amounts can be
      * covered by the fundedWallet.
      */
-    transactionRequest.addCoinOutput(receiver.address, 1500, provider.getBaseAssetId());
+    transactionRequest.addCoinOutput(receiver.address, 1500, baseAssetId);
     transactionRequest.addCoinOutput(receiver.address, 3000, assetA);
     transactionRequest.addCoinOutput(receiver.address, 4500, assetB);
 

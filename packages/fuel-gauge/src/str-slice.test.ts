@@ -11,7 +11,6 @@ import contractBytes from '../test/typegen/contracts/StrSliceAbi.hex';
 
 /**
  * @group node
- * @group browser
  */
 describe('str slice', () => {
   it('echoes a str slice [CONTRACT]', async () => {

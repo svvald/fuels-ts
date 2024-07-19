@@ -1,24 +1,24 @@
-import { TransactionType } from 'fuels';
-import { launchTestNode } from 'fuels/test-utils';
+import { sleep, Provider, TransactionType } from 'fuels';
+import { launchNode } from 'fuels/test-utils';
 
 /**
  * @group node
- * @group browser
  */
 describe('Transaction', () => {
   it('should ensure a mint transaction can be decoded just fine', async () => {
-    using launched = await launchTestNode({
-      nodeOptions: {
-        args: ['--poa-instant', 'false', '--poa-interval-period', '1ms'],
-        loggingEnabled: false,
-      },
+    const { cleanup, ip, port } = await launchNode({
+      args: ['--poa-instant', 'false', '--poa-interval-period', '100ms'],
+      loggingEnabled: false,
     });
-    const { provider } = launched;
 
+    await sleep(500);
+    const nodeProvider = await Provider.create(`http://${ip}:${port}/v1/graphql`);
     const {
       transactions: [tx],
-    } = await provider.getTransactions({ first: 1 });
+    } = await nodeProvider.getTransactions({ first: 1 });
 
     expect(tx.type).toBe(TransactionType.Mint);
+
+    cleanup();
   });
 });

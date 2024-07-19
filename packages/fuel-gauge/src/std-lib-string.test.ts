@@ -1,40 +1,47 @@
-import { bn, Predicate, Wallet, Address } from 'fuels';
-import { launchTestNode } from 'fuels/test-utils';
+import { bn, Predicate, Wallet, Address, Provider, FUEL_NETWORK_URL } from 'fuels';
+import type { Contract } from 'fuels';
+import { generateTestWallet } from 'fuels/test-utils';
 
-import {
-  PredicateStdLibStringAbi__factory,
-  ScriptStdLibStringAbi__factory,
-  StdLibStringAbi__factory,
-} from '../test/typegen';
-import StdLibStringAbiHex from '../test/typegen/contracts/StdLibStringAbi.hex';
+import { FuelGaugeProjectsEnum, getFuelGaugeForcProject } from '../test/fixtures';
 
-import { launchTestContract } from './utils';
+import { getScript, getSetupContract } from './utils';
+
+const setupContract = getSetupContract('std-lib-string');
+let contractInstance: Contract;
+
+let baseAssetId: string;
+beforeAll(async () => {
+  contractInstance = await setupContract();
+  baseAssetId = contractInstance.provider.getBaseAssetId();
+});
+
+const setup = async (balance = 500_000) => {
+  const provider = await Provider.create(FUEL_NETWORK_URL);
+
+  // Create wallet
+  const wallet = await generateTestWallet(provider, [[balance, baseAssetId]]);
+
+  return wallet;
+};
 
 /**
  * @group node
- * @group browser
  */
-
-function setupContract() {
-  return launchTestContract({
-    deployer: StdLibStringAbi__factory,
-    bytecode: StdLibStringAbiHex,
-  });
-}
-
 describe('std-lib-string Tests', () => {
+  const { binHexlified: predicateStdString, abiContents: predicateStdStringAbi } =
+    getFuelGaugeForcProject(FuelGaugeProjectsEnum.PREDICATE_STD_LIB_STRING);
+
   it('should test std-lib-string return', async () => {
-    using contractInstance = await setupContract();
     const { waitForResult } = await contractInstance.functions
       .return_dynamic_string()
       .call<string>();
 
     const { value } = await waitForResult();
+
     expect(value).toBe('Hello World');
   });
 
   it('should test std-lib-string input', async () => {
-    using contractInstance = await setupContract();
     const INPUT = 'Hello World';
 
     const { waitForResult } = await contractInstance.functions.accepts_dynamic_string(INPUT).call();
@@ -44,45 +51,28 @@ describe('std-lib-string Tests', () => {
   });
 
   it('should test String input [predicate-std-lib-string]', async () => {
-    using launched = await launchTestNode();
-
-    const {
-      provider,
-      wallets: [wallet],
-    } = launched;
-
-    const receiver = Wallet.fromAddress(Address.fromRandom(), provider);
-
+    const wallet = await setup();
+    const receiver = Wallet.fromAddress(Address.fromRandom(), wallet.provider);
     const amountToPredicate = 300_000;
     const amountToReceiver = 50;
     type MainArgs = [number, number, string];
     const predicate = new Predicate<MainArgs>({
-      bytecode: PredicateStdLibStringAbi__factory.bin,
-      abi: PredicateStdLibStringAbi__factory.abi,
-      provider,
+      bytecode: predicateStdString,
+      abi: predicateStdStringAbi,
+      provider: wallet.provider,
       inputData: [1, 2, 'Hello World'],
     });
 
     // setup predicate
-    const setupTx = await wallet.transfer(
-      predicate.address,
-      amountToPredicate,
-      provider.getBaseAssetId(),
-      {
-        gasLimit: 10_000,
-      }
-    );
+    const setupTx = await wallet.transfer(predicate.address, amountToPredicate, baseAssetId, {
+      gasLimit: 10_000,
+    });
     await setupTx.waitForResult();
 
     const initialReceiverBalance = await receiver.getBalance();
-    const tx = await predicate.transfer(
-      receiver.address,
-      amountToReceiver,
-      provider.getBaseAssetId(),
-      {
-        gasLimit: 10_000,
-      }
-    );
+    const tx = await predicate.transfer(receiver.address, amountToReceiver, baseAssetId, {
+      gasLimit: 10_000,
+    });
     const { isStatusSuccess } = await tx.waitForResult();
 
     // Check the balance of the receiver
@@ -95,14 +85,10 @@ describe('std-lib-string Tests', () => {
   });
 
   it('should test String input [script-std-lib-string]', async () => {
-    using launched = await launchTestNode();
-
-    const {
-      wallets: [wallet],
-    } = launched;
-
+    const wallet = await setup();
+    type MainArgs = [string];
+    const scriptInstance = getScript<MainArgs, void>('script-std-lib-string', wallet);
     const INPUT = 'Hello World';
-    const scriptInstance = ScriptStdLibStringAbi__factory.createInstance(wallet);
 
     const { waitForResult } = await scriptInstance.functions.main(INPUT).call();
     const { value } = await waitForResult();

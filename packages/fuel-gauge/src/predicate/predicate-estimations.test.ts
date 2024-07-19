@@ -5,60 +5,69 @@ import type {
   BN,
 } from 'fuels';
 import {
+  Provider,
   Predicate,
   bn,
   ScriptTransactionRequest,
   InputType,
+  FUEL_NETWORK_URL,
   getRandomB256,
   WalletUnlocked,
   isRequestInputResource,
 } from 'fuels';
-import { launchTestNode } from 'fuels/test-utils';
+import { seedTestWallet } from 'fuels/test-utils';
 
-import {
-  PredicateMainArgsStructAbi__factory,
-  PredicateTrueAbi__factory,
-  PredicateValidateTransferAbi__factory,
-} from '../../test/typegen';
+import { FuelGaugeProjectsEnum, getFuelGaugeForcProject } from '../../test/fixtures';
 import type { Validation } from '../types/predicate';
-
-import { fundPredicate } from './utils/predicate';
 
 /**
  * @group node
- * @group browser
  */
 describe('Predicate', () => {
+  const { binHexlified: predicateTrueBytecode } = getFuelGaugeForcProject(
+    FuelGaugeProjectsEnum.PREDICATE_TRUE
+  );
+
+  const { binHexlified: predicateBytesMainArgsStruct, abiContents: predicateAbiMainArgsStruct } =
+    getFuelGaugeForcProject(FuelGaugeProjectsEnum.PREDICATE_MAIN_ARGS_STRUCT);
+
   describe('Estimate predicate gas', () => {
+    let provider: Provider;
+    let predicateTrue: Predicate<[]>;
+    let predicateStruct: Predicate<[Validation]>;
+    let baseAssetId: string;
     const fundingAmount = 10_000;
 
+    beforeAll(async () => {
+      provider = await Provider.create(FUEL_NETWORK_URL);
+      baseAssetId = provider.getBaseAssetId();
+      predicateTrue = new Predicate({
+        bytecode: predicateTrueBytecode,
+        provider,
+      });
+      predicateStruct = new Predicate<[Validation]>({
+        bytecode: predicateBytesMainArgsStruct,
+        abi: predicateAbiMainArgsStruct,
+        provider,
+      });
+    });
+
+    beforeEach(async () => {
+      await seedTestWallet(predicateStruct, [
+        {
+          assetId: baseAssetId,
+          amount: bn(fundingAmount),
+        },
+      ]);
+    });
+
     it('estimatePredicates should assign gas to the correct input', async () => {
-      using launched = await launchTestNode();
-
-      const {
-        wallets: [wallet],
-        provider,
-      } = launched;
-
-      const predicateTrue = new Predicate({
-        bytecode: PredicateTrueAbi__factory.bin,
-        provider,
-      });
-
-      const predicateStruct = new Predicate<[Validation]>({
-        bytecode: PredicateMainArgsStructAbi__factory.bin,
-        abi: PredicateMainArgsStructAbi__factory.abi,
-        provider,
-      });
-
-      await fundPredicate(wallet, predicateStruct, fundingAmount);
-
       const tx = new ScriptTransactionRequest();
 
       // Get resources from the predicate struct
       const ressources = await predicateStruct.getResourcesToSpend([
         {
-          assetId: provider.getBaseAssetId(),
+          assetId: baseAssetId,
           amount: bn(10_000),
         },
       ]);
@@ -130,23 +139,9 @@ describe('Predicate', () => {
     });
 
     test('predicate does not get estimated again if it has already been estimated', async () => {
-      using launched = await launchTestNode();
-
-      const {
-        wallets: [wallet],
-        provider,
-      } = launched;
-
       const tx = new ScriptTransactionRequest();
-
-      const predicateTrue = new Predicate({
-        bytecode: PredicateTrueAbi__factory.bin,
-        provider,
-      });
-
-      await fundPredicate(wallet, predicateTrue, fundingAmount);
-
-      const resources = await predicateTrue.getResourcesToSpend([[1, provider.getBaseAssetId()]]);
+      await seedTestWallet(predicateTrue, [[2000, baseAssetId]]);
+      const resources = await predicateTrue.getResourcesToSpend([[1, baseAssetId]]);
       tx.addResources(resources);
 
       const spy = vi.spyOn(provider.operations, 'estimatePredicates');
@@ -158,40 +153,16 @@ describe('Predicate', () => {
     });
 
     test('Predicates get estimated if one of them is not estimated', async () => {
-      using launched = await launchTestNode();
-
-      const {
-        wallets: [wallet],
-        provider,
-      } = launched;
-
-      const predicateTrue = new Predicate({
-        bytecode: PredicateTrueAbi__factory.bin,
-        provider,
-      });
-
-      const predicateStruct = new Predicate<[Validation]>({
-        bytecode: PredicateMainArgsStructAbi__factory.bin,
-        abi: PredicateMainArgsStructAbi__factory.abi,
-        provider,
-      });
-
-      await fundPredicate(wallet, predicateTrue, fundingAmount);
-      await fundPredicate(wallet, predicateStruct, fundingAmount);
-
       const tx = new ScriptTransactionRequest();
-      const trueResources = await predicateTrue.getResourcesToSpend([
-        [1, provider.getBaseAssetId()],
-      ]);
-
+      await seedTestWallet(predicateTrue, [[2000, baseAssetId]]);
+      const trueResources = await predicateTrue.getResourcesToSpend([[1, baseAssetId]]);
       tx.addResources(trueResources);
 
       const spy = vi.spyOn(provider.operations, 'estimatePredicates');
       await provider.estimatePredicates(tx);
 
-      const structResources = await predicateStruct.getResourcesToSpend([
-        [1, provider.getBaseAssetId()],
-      ]);
+      await seedTestWallet(predicateStruct, [[2000, baseAssetId]]);
+      const structResources = await predicateStruct.getResourcesToSpend([[1, baseAssetId]]);
       tx.addResources(structResources);
 
       await provider.estimatePredicates(tx);
@@ -203,23 +174,20 @@ describe('Predicate', () => {
     });
 
     test('transferring funds from a predicate estimates the predicate and does only one dry run', async () => {
-      using launched = await launchTestNode();
-
-      const {
-        wallets: [wallet],
-        provider,
-      } = launched;
+      const { binHexlified, abiContents } = getFuelGaugeForcProject(
+        FuelGaugeProjectsEnum.PREDICATE_VALIDATE_TRANSFER
+      );
 
       const amountToPredicate = 200_000;
 
-      const predicateValidateTransfer = new Predicate<[BN]>({
-        bytecode: PredicateValidateTransferAbi__factory.bin,
-        abi: PredicateValidateTransferAbi__factory.abi,
+      const predicate = new Predicate<[BN]>({
+        bytecode: binHexlified,
+        abi: abiContents,
         provider,
         inputData: [bn(amountToPredicate)],
       });
 
-      await fundPredicate(wallet, predicateValidateTransfer, amountToPredicate);
+      await seedTestWallet(predicate, [[amountToPredicate, baseAssetId]]);
 
       const receiverWallet = WalletUnlocked.generate({
         provider,
@@ -230,11 +198,7 @@ describe('Predicate', () => {
       const dryRunSpy = vi.spyOn(provider.operations, 'dryRun');
       const estimatePredicatesSpy = vi.spyOn(provider.operations, 'estimatePredicates');
 
-      const response = await predicateValidateTransfer.transfer(
-        receiverWallet.address.toB256(),
-        1,
-        provider.getBaseAssetId()
-      );
+      const response = await predicate.transfer(receiverWallet.address.toB256(), 1, baseAssetId);
 
       const { isStatusSuccess } = await response.waitForResult();
       expect(isStatusSuccess).toBeTruthy();
@@ -248,26 +212,9 @@ describe('Predicate', () => {
 
     describe('predicate resource fetching and predicateData population', () => {
       test('getting predicate resources via the predicate automatically populates predicateData', async () => {
-        using launched = await launchTestNode();
-
-        const {
-          wallets: [wallet],
-          provider,
-        } = launched;
-
-        const predicateStruct = new Predicate<[Validation]>({
-          bytecode: PredicateMainArgsStructAbi__factory.bin,
-          abi: PredicateMainArgsStructAbi__factory.abi,
-          provider,
-        });
-
-        await fundPredicate(wallet, predicateStruct, fundingAmount);
-
         const transactionRequest = new ScriptTransactionRequest();
 
-        const resources = await predicateStruct.getResourcesToSpend([
-          [fundingAmount, provider.getBaseAssetId()],
-        ]);
+        const resources = await predicateStruct.getResourcesToSpend([[fundingAmount, baseAssetId]]);
         resources.forEach((resource) => {
           expect(resource.predicateData).toBeDefined();
         });
@@ -282,25 +229,10 @@ describe('Predicate', () => {
       });
 
       test('getting predicate resources via the provider requires manual predicateData population', async () => {
-        using launched = await launchTestNode();
-
-        const {
-          wallets: [wallet],
-          provider,
-        } = launched;
-
-        const predicateStruct = new Predicate<[Validation]>({
-          bytecode: PredicateMainArgsStructAbi__factory.bin,
-          abi: PredicateMainArgsStructAbi__factory.abi,
-          provider,
-        });
-
-        await fundPredicate(wallet, predicateStruct, fundingAmount);
-
         const transactionRequest = new ScriptTransactionRequest();
 
         const resources = await provider.getResourcesToSpend(predicateStruct.address, [
-          [fundingAmount, provider.getBaseAssetId()],
+          [fundingAmount, baseAssetId],
         ]);
 
         resources.forEach((resource) => {
