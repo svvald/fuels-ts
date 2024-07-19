@@ -2,56 +2,148 @@
  * Types for Fuel JSON ABI Format as defined on:
  * https://github.com/FuelLabs/fuel-specs/blob/master/src/abi/json-abi-format.md
  */
+// export interface JsonAbiOld {
+//   readonly types: readonly JsonAbiType[];
+//   readonly loggedTypes: readonly JsonAbiLoggedType[];
+//   readonly functions: readonly JsonAbiFunction[];
+//   readonly messagesTypes: readonly JsonAbiMessagesType[];
+//   readonly configurables: readonly JsonAbiConfigurable[];
+//   readonly encodingVersion: string;
+// }
+
 export interface JsonAbi {
-  readonly types: readonly JsonAbiType[];
-  readonly loggedTypes: readonly JsonAbiLoggedType[];
-  readonly functions: readonly JsonAbiFunction[];
-  readonly messagesTypes: readonly JsonAbiMessagesType[];
-  readonly configurables: readonly JsonAbiConfigurable[];
-  readonly encoding?: string;
+  readonly specVersion: string;
+  readonly encodingVersion: string;
+  readonly programType: string | 'script' | 'contract' | 'predicate' | 'library';
+  readonly concreteTypes: readonly ConcreteType[];
+  readonly typesMetadata: readonly MetadataType[];
+  readonly functions: readonly AbiFunction[];
+  readonly loggedTypes: readonly LoggedType[];
+  readonly messageTypes?: readonly MessageType[];
+  readonly configurables: readonly Configurable[];
 }
 
-export interface JsonAbiType {
-  readonly typeId: number;
+export interface ConcreteType {
   readonly type: string;
-  readonly components: readonly JsonAbiArgument[] | null;
-  readonly typeParameters: readonly number[] | null;
+  readonly concreteTypeId: string;
+  readonly metadataTypeId?: number;
+  readonly typeArguments?: readonly string[];
 }
 
-export interface JsonAbiArgument {
-  readonly type: number;
+export interface MetadataType {
+  readonly type: string;
+  readonly metadataTypeId: number;
+  readonly components?: readonly Component[];
+  readonly typeParameters?: readonly number[];
+}
+
+export interface Component extends TypeArgument {
   readonly name: string;
-  readonly typeArguments: readonly JsonAbiArgument[] | null;
 }
 
-export interface JsonAbiArgumentWithoutName {
-  readonly type: number;
-  readonly typeArguments: readonly JsonAbiArgumentWithoutName[] | null;
+export interface TypeArgument {
+  readonly typeId: number | string; // the type metadata declaration ID or type concrete declaration hash based ID of the type of the component.
+  readonly typeArguments?: readonly TypeArgument[];
 }
 
-export interface JsonAbiLoggedType {
+export interface AbiFunction {
+  readonly name: string;
+  readonly inputs: readonly AbiFunctionInput[];
+  readonly output: string;
+  readonly attributes: readonly AbiFunctionAttribute[] | null;
+}
+
+export interface AbiFunctionInput {
+  readonly name: string;
+  readonly concreteTypeId: string;
+}
+
+export type AbiFunctionAttribute =
+  | StorageAttr
+  | PayableAttr
+  | TestAttr
+  | InlineAttr
+  | DocCommentAttr
+  | DocAttr;
+
+export interface PayableAttr {
+  readonly name: 'payable';
+}
+export interface StorageAttr {
+  readonly name: 'storage';
+  readonly arguments: readonly ('read' | 'write')[];
+}
+export interface TestAttr {
+  readonly name: 'test';
+}
+export interface InlineAttr {
+  readonly name: 'inline';
+  readonly arguments: 'never' | 'always';
+}
+export interface DocCommentAttr {
+  readonly name: 'doc-comment';
+  readonly arguments: string;
+}
+export interface DocAttr {
+  readonly name: 'doc';
+}
+
+export interface LoggedType {
   readonly logId: string;
-  readonly loggedType: JsonAbiArgument;
+  readonly concreteTypeId: string; // the _type concrete declaration_ hash based ID of the value being logged.
 }
 
-export interface JsonAbiMessagesType {
-  readonly messageDataType: JsonAbiArgumentWithoutName;
+export interface MessageType {
+  readonly message_id: string;
+  readonly concreteTypeId: string;
 }
-
-export interface JsonAbiFunction {
+export interface Configurable {
   readonly name: string;
-  readonly inputs: readonly JsonAbiArgument[];
-  readonly output: JsonAbiArgument;
-  readonly attributes: readonly JsonAbiFunctionAttribute[] | null;
+  readonly concreteTypeId: string;
+  readonly offset: number;
 }
 
-export interface JsonAbiFunctionAttribute {
-  readonly name: string;
-  readonly arguments: ReadonlyArray<string>;
-}
+// export interface JsonAbiType {
+//   readonly typeId: number;
+//   readonly type: string;
+//   readonly components: readonly JsonAbiArgument[] | null;
+//   readonly typeParameters: readonly number[] | null;
+// }
 
-export interface JsonAbiConfigurable {
-  name: string;
-  configurableType: JsonAbiArgument;
-  offset: number;
-}
+// export interface JsonAbiArgument {
+//   readonly type: number;
+//   readonly name: string;
+//   readonly typeArguments: readonly JsonAbiArgument[] | null;
+// }
+
+// export interface JsonAbiArgumentWithoutName {
+//   readonly type: number;
+//   readonly typeArguments: readonly JsonAbiArgumentWithoutName[] | null;
+// }
+
+// export interface JsonAbiLoggedType {
+//   readonly logId: string;
+//   readonly loggedType: JsonAbiArgument;
+// }
+
+// export interface JsonAbiMessagesType {
+//   readonly messageDataType: JsonAbiArgumentWithoutName;
+// }
+
+// export interface JsonAbiFunction {
+//   readonly name: string;
+//   readonly inputs: readonly JsonAbiArgument[];
+//   readonly output: JsonAbiArgument;
+//   readonly attributes: readonly JsonAbiFunctionAttribute[] | null;
+// }
+
+// export interface JsonAbiFunctionAttribute {
+//   readonly name: string;
+//   readonly arguments: ReadonlyArray<string>;
+// }
+
+// export interface JsonAbiConfigurable {
+//   name: string;
+//   configurableType: JsonAbiArgument;
+//   offset: number;
+// }
