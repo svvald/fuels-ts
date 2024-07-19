@@ -1,16 +1,21 @@
 import { TargetEnum } from '../../types/enums/TargetEnum';
-import type { IFunctionAttributes } from '../../types/interfaces/IFunction';
 import type { IType } from '../../types/interfaces/IType';
 import type { JsonAbiFunction } from '../../types/interfaces/JsonAbi';
 import { findType } from '../../utils/findType';
 import { parseTypeArguments } from '../../utils/parseTypeArguments';
 import { EmptyType } from '../types/EmptyType';
 
+export interface AbiFunctionAttributes {
+  inputs: string;
+  output: string;
+  prefixedInputs: string;
+}
+
 export class AbiFunction {
   public name: string;
   public types: IType[];
   public rawAbiFunction: JsonAbiFunction;
-  public attributes: IFunctionAttributes;
+  public attributes: AbiFunctionAttributes;
 
   constructor(params: { types: IType[]; rawAbiFunction: JsonAbiFunction }) {
     this.rawAbiFunction = params.rawAbiFunction;
