@@ -141,7 +141,9 @@ export const getCoder: GetCoderFn = (
 
   const tupleMatch = tupleRegEx.exec(resolvedAbiType.type)?.groups;
   if (tupleMatch) {
-    const coders = components.map((component) => getCoder(component, { encoding: ENCODING_V1 }));
+    const coders = (components ?? []).map((component) =>
+      getCoder(component, { encoding: ENCODING_V1 })
+    );
     return new TupleCoder(coders as Coder[]);
   }
 
