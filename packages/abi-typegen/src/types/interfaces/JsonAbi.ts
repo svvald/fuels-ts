@@ -17,7 +17,7 @@ export interface JsonAbi {
   readonly programType: string | 'script' | 'contract' | 'predicate' | 'library';
   readonly concreteTypes: readonly ConcreteType[];
   readonly typesMetadata: readonly MetadataType[];
-  readonly functions: readonly AbiFunction[];
+  readonly functions: readonly JsonAbiFunction[];
   readonly loggedTypes: readonly LoggedType[];
   readonly messageTypes?: readonly MessageType[];
   readonly configurables: readonly Configurable[];
@@ -46,7 +46,7 @@ export interface TypeArgument {
   readonly typeArguments?: readonly TypeArgument[];
 }
 
-export interface AbiFunction {
+export interface JsonAbiFunction {
   readonly name: string;
   readonly inputs: readonly AbiFunctionInput[];
   readonly output: string;

@@ -3,12 +3,12 @@ import { normalizeString } from '@fuel-ts/utils';
 
 import type { ProgramTypeEnum } from '../types/enums/ProgramTypeEnum';
 import type { IConfigurable } from '../types/interfaces/IConfigurable';
-import type { IFunction } from '../types/interfaces/IFunction';
 import type { IType } from '../types/interfaces/IType';
 import type { JsonAbi } from '../types/interfaces/JsonAbi';
 import { parseConfigurables } from '../utils/parseConfigurables';
-import { parseFunctions } from '../utils/parseFunctions';
 import { parseTypes } from '../utils/parseTypes';
+
+import { AbiFunction } from './functions/Function';
 
 /*
   Manages many instances of Types and Functions
@@ -27,7 +27,7 @@ export class Abi {
   public storageSlotsContents?: string;
 
   public types: IType[];
-  public functions: IFunction[];
+  public functions: AbiFunction[];
   public configurables: IConfigurable[];
 
   constructor(params: {
@@ -80,10 +80,12 @@ export class Abi {
   }
 
   parse() {
-    const { functions: rawAbiFunctions, configurables: rawAbiConfigurables } = this.rawContents;
+    const { configurables: rawAbiConfigurables } = this.rawContents;
 
     const types = parseTypes(this.rawContents);
-    const functions = parseFunctions({ rawAbiFunctions, types });
+    const functions = this.rawContents.functions.map(
+      (rawAbiFunction) => new AbiFunction({ rawAbiFunction, types })
+    );
     const configurables = parseConfigurables({ rawAbiConfigurables, types });
 
     return {

@@ -1,11 +1,12 @@
-import type { IFunction, JsonAbiFunction, IFunctionAttributes } from '../../index';
 import { TargetEnum } from '../../types/enums/TargetEnum';
+import type { IFunctionAttributes } from '../../types/interfaces/IFunction';
 import type { IType } from '../../types/interfaces/IType';
+import type { JsonAbiFunction } from '../../types/interfaces/JsonAbi';
 import { findType } from '../../utils/findType';
 import { parseTypeArguments } from '../../utils/parseTypeArguments';
 import { EmptyType } from '../types/EmptyType';
 
-export class AbiFunction implements IFunction {
+export class AbiFunction {
   public name: string;
   public types: IType[];
   public rawAbiFunction: JsonAbiFunction;
