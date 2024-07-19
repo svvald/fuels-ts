@@ -10,92 +10,82 @@ export class ResolvedAbiType {
   readonly originalTypeArguments: readonly string[] | undefined;
   readonly components: readonly ResolvedAbiType[] | undefined;
 
+  private static getResolvedConcreteType(
+    abi: JsonAbi,
+    concreteType: ConcreteType
+  ): Pick<ResolvedAbiType, 'components' | 'type' | 'originalTypeArguments'> {
+    const metadataType = abi.typeMetadata.find(
+      (tm) => tm.metadataTypeId === concreteType.metadataTypeId
+    );
+
+    const type = metadataType?.type ?? concreteType.type;
+    const originalTypeArguments = concreteType.typeArguments;
+
+    if (!metadataType) {
+      return { type, originalTypeArguments, components: undefined };
+    }
+
+    if (concreteType.typeArguments && concreteType.typeArguments.length > 256) {
+      throw new FuelError(
+        ErrorCode.INVALID_COMPONENT,
+        `The provided ABI type is too long: ${concreteType.type}.`
+      );
+    }
+
+    const components = ResolvedAbiType.getResolvedGenericComponents(
+      abi,
+      concreteType.typeArguments,
+      metadataType.components,
+      metadataType.typeParameters ??
+        ResolvedAbiType.getImplicitGenericTypeParameters(abi, metadataType.components)
+    );
+
+    return {
+      type,
+      originalTypeArguments,
+      components,
+    };
+  }
+
+  private static getResolvedTypeArgument(
+    abi: JsonAbi,
+    typeArgument: TypeArgument
+  ): Pick<ResolvedAbiType, 'components' | 'type' | 'originalTypeArguments'> {
+    if (typeof typeArgument.typeId === 'string') {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      const concreteType = abi.concreteTypes.find((x) => x.concreteTypeId === typeArgument.typeId)!;
+      return ResolvedAbiType.getResolvedConcreteType(abi, concreteType);
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    const metadataType = abi.typeMetadata.find((tm) => tm.metadataTypeId === typeArgument.typeId)!;
+
+    const components = ResolvedAbiType.getResolvedGenericComponents(
+      abi,
+      typeArgument.typeArguments,
+      metadataType.components,
+      metadataType.typeParameters ??
+        ResolvedAbiType.getImplicitGenericTypeParameters(abi, metadataType.components)
+    );
+    return {
+      type: metadataType.type,
+      components,
+      originalTypeArguments: typeArgument.typeArguments,
+    };
+  }
+
   constructor(abi: JsonAbi, abiType: ConcreteType | TypeArgument, name: string) {
     this.abi = abi;
     this.name = name;
 
-    if ('concreteTypeId' in abiType) {
-      // it's a concrete type
+    const { type, components, originalTypeArguments } =
+      'concreteTypeId' in abiType
+        ? ResolvedAbiType.getResolvedConcreteType(abi, abiType)
+        : ResolvedAbiType.getResolvedTypeArgument(abi, abiType);
 
-      const concreteType = abiType;
-
-      this.type = concreteType.type;
-      if (concreteType.metadataTypeId) {
-        this.originalTypeArguments = concreteType.typeArguments;
-
-        if (concreteType.typeArguments && concreteType.typeArguments.length > 256) {
-          throw new FuelError(
-            ErrorCode.INVALID_COMPONENT,
-            `The provided ABI type is too long: ${concreteType.type}.`
-          );
-        }
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        const metadataType = this.abi.typeMetadata.find(
-          (tm) => tm.metadataTypeId === concreteType.metadataTypeId
-        )!;
-
-        this.type = metadataType.type;
-
-        this.components = ResolvedAbiType.getResolvedGenericComponents(
-          abi,
-          concreteType.typeArguments,
-          metadataType.components,
-          metadataType.typeParameters ??
-            ResolvedAbiType.getImplicitGenericTypeParameters(abi, metadataType.components)
-        );
-      }
-    } else {
-      // it's a type argument
-
-      const typeArgument = abiType;
-
-      if (typeof typeArgument.typeId === 'string') {
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        const concreteType = abi.concreteTypes.find(
-          (x) => x.concreteTypeId === typeArgument.typeId
-        )!;
-        this.type = concreteType.type;
-        if (concreteType.metadataTypeId) {
-          this.originalTypeArguments = concreteType.typeArguments;
-
-          if (concreteType.typeArguments && concreteType.typeArguments.length > 256) {
-            throw new FuelError(
-              ErrorCode.INVALID_COMPONENT,
-              `The provided ABI type is too long: ${concreteType.type}.`
-            );
-          }
-          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-          const metadataType = this.abi.typeMetadata.find(
-            (tm) => tm.metadataTypeId === concreteType.metadataTypeId
-          )!;
-
-          this.type = metadataType.type;
-
-          this.components = ResolvedAbiType.getResolvedGenericComponents(
-            abi,
-            concreteType.typeArguments,
-            metadataType.components,
-            metadataType.typeParameters ??
-              ResolvedAbiType.getImplicitGenericTypeParameters(abi, metadataType.components)
-          );
-        }
-      } else {
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        const metadataType = abi.typeMetadata.find(
-          (tm) => tm.metadataTypeId === typeArgument.typeId
-        )!;
-
-        this.type = metadataType?.type;
-
-        this.components = ResolvedAbiType.getResolvedGenericComponents(
-          abi,
-          typeArgument.typeArguments,
-          metadataType.components,
-          metadataType.typeParameters ??
-            ResolvedAbiType.getImplicitGenericTypeParameters(abi, metadataType.components)
-        );
-      }
-    }
+    this.type = type;
+    this.components = components;
+    this.originalTypeArguments = originalTypeArguments;
   }
 
   private static getResolvedGenericComponents(
@@ -255,7 +245,7 @@ export class ResolvedAbiType {
       return `str[${strMatch.length}]`;
     }
 
-    if (this.components === null) {
+    if (this.components === undefined) {
       return this.type;
     }
 
@@ -268,7 +258,9 @@ export class ResolvedAbiType {
     const typeArgumentsSignature =
       this.originalTypeArguments !== null
         ? `<${this.originalTypeArguments
-            .map((a) => new ResolvedAbiType(this.abi, a).getSignature())
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            ?.map((ta) => this.abi.concreteTypes.find((ct) => ct.concreteTypeId === ta)!)
+            .map((a) => new ResolvedAbiType(this.abi, a, '').getSignature())
             .join(',')}>`
         : '';
 
