@@ -2,12 +2,11 @@ import { ErrorCode, FuelError } from '@fuel-ts/errors';
 import { normalizeString } from '@fuel-ts/utils';
 
 import type { ProgramTypeEnum } from '../types/enums/ProgramTypeEnum';
-import type { IConfigurable } from '../types/interfaces/IConfigurable';
 import type { IType } from '../types/interfaces/IType';
 import type { JsonAbi } from '../types/interfaces/JsonAbi';
-import { parseConfigurables } from '../utils/parseConfigurables';
 import { parseTypes } from '../utils/parseTypes';
 
+import { AbiConfigurable } from './configurable/Configurable';
 import { AbiFunction } from './functions/Function';
 
 /*
@@ -28,7 +27,7 @@ export class Abi {
 
   public types: IType[];
   public functions: AbiFunction[];
-  public configurables: IConfigurable[];
+  public configurables: AbiConfigurable[];
 
   constructor(params: {
     filepath: string;
@@ -80,13 +79,13 @@ export class Abi {
   }
 
   parse() {
-    const { configurables: rawAbiConfigurables } = this.rawContents;
-
     const types = parseTypes(this.rawContents);
     const functions = this.rawContents.functions.map(
       (rawAbiFunction) => new AbiFunction({ rawAbiFunction, types })
     );
-    const configurables = parseConfigurables({ rawAbiConfigurables, types });
+    const configurables = this.rawContents.configurables.map(
+      (rawAbiConfigurable) => new AbiConfigurable({ types, rawAbiConfigurable })
+    );
 
     return {
       types,

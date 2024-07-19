@@ -1,14 +1,13 @@
-import type { IConfigurable } from '../../types/interfaces/IConfigurable';
 import type { IType } from '../../types/interfaces/IType';
-import type { JsonAbiConfigurable } from '../../types/interfaces/JsonAbi';
+import type { Configurable } from '../../types/interfaces/JsonAbi';
 import { findType } from '../../utils/findType';
 
-export class Configurable implements IConfigurable {
+export class AbiConfigurable {
   public name: string;
   public type: IType;
-  public rawAbiConfigurable: JsonAbiConfigurable;
+  public rawAbiConfigurable: Configurable;
 
-  constructor(params: { types: IType[]; rawAbiConfigurable: JsonAbiConfigurable }) {
+  constructor(params: { types: IType[]; rawAbiConfigurable: Configurable }) {
     const { types, rawAbiConfigurable } = params;
 
     this.name = rawAbiConfigurable.name;

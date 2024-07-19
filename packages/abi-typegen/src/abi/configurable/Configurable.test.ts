@@ -6,7 +6,7 @@ import type { IType } from '../../types/interfaces/IType';
 import type { JsonAbiType } from '../../types/interfaces/JsonAbi';
 import * as findTypeMod from '../../utils/findType';
 
-import { Configurable } from './Configurable';
+import { AbiConfigurable } from './Configurable';
 
 /**
  * @group node
@@ -50,7 +50,7 @@ describe('Configurable.ts', () => {
     const types: IType[] = [type];
     const rawAbiConfigurable = configurables[0];
 
-    const configurable = new Configurable({ types, rawAbiConfigurable });
+    const configurable = new AbiConfigurable({ types, rawAbiConfigurable });
 
     expect(findType).toHaveBeenCalledTimes(1);
     expect(configurable.name).toEqual('FEE');
