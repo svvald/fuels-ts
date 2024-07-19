@@ -202,16 +202,16 @@ export class ResolvedAbiType {
   }
 
   private static getMetadataType(abi: JsonAbi, type: ConcreteType | TypeArgument) {
-    const typeId = 'concreteTypeId' in type ? type.metadataTypeId : type.typeId;
+    const typeId = 'concreteTypeId' in type ? type.concreteTypeId : type.typeId;
 
     if (typeof typeId === 'number') {
-      return abi.typeMetadata.find((tm) => tm.metadataTypeId === typeId);
+      return abi.typesMetadata.find((tm) => tm.metadataTypeId === typeId);
     }
-    const { metadataTypeId } = abi.concreteTypes.find(
+    const concreteType = abi.concreteTypes.find(
       (ct) => ct.concreteTypeId === typeId
     ) as ConcreteType;
 
-    return abi.typeMetadata.find((tm) => tm.metadataTypeId === metadataTypeId);
+    return abi.typesMetadata.find((tm) => tm.metadataTypeId === concreteType.metadataTypeId);
   }
 
   getSignature(): string {
@@ -265,7 +265,7 @@ export class ResolvedAbiType {
     }
 
     const typeArgumentsSignature =
-      this.originalTypeArguments !== null
+      this.originalTypeArguments && this.originalTypeArguments?.length > 0
         ? `<${this.originalTypeArguments
             ?.map((ta) =>
               typeof ta === 'string'

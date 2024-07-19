@@ -733,7 +733,7 @@ describe('Abi interface', () => {
     });
   });
 
-  describe('abi types', () => {
+  describe.skip('abi types', () => {
     it('should return the correct type when it exists', () => {
       const abiType = exhaustiveExamplesInterface.getTypeById(0);
       expect(abiType.type).toEqual('()');

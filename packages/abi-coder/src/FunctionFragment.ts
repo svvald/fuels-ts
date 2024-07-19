@@ -10,7 +10,7 @@ import { ResolvedAbiType } from './ResolvedAbiType';
 import type { DecodedValue, InputValue } from './encoding/coders/AbstractCoder';
 import { StdStringCoder } from './encoding/coders/StdStringCoder';
 import { TupleCoder } from './encoding/coders/TupleCoder';
-import type { AbiFunction, JsonAbi } from './types/JsonAbi';
+import type { AbiFunction, JsonAbi, StorageAttr } from './types/JsonAbi';
 import type { EncodingVersion } from './utils/constants';
 import { OPTION_CODER_TYPE } from './utils/constants';
 import {
@@ -99,7 +99,7 @@ export class FunctionFragment<
     const optionalInputs = inputTypes.filter(
       (ct) =>
         ct.type === '()' ||
-        abi.typeMetadata.find((tm) => tm.metadataTypeId === ct.metadataTypeId)?.type ===
+        abi.typesMetadata.find((tm) => tm.metadataTypeId === ct.metadataTypeId)?.type ===
           OPTION_CODER_TYPE
     );
     if (optionalInputs.length === inputTypes.length) {
@@ -183,7 +183,9 @@ export class FunctionFragment<
    * @returns True if the function is read-only or pure, false otherwise.
    */
   isReadOnly(): boolean {
-    const storageAttribute = this.attributes?.find((attr) => attr.name === 'storage');
+    const storageAttribute = this.attributes?.find((attr) => attr.name === 'storage') as
+      | StorageAttr
+      | undefined;
     return !storageAttribute?.arguments.includes('write');
   }
 }

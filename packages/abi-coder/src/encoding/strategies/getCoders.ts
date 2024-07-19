@@ -16,7 +16,7 @@ export function getCoders(
   return components.reduce((obj, component) => {
     const o: Record<string, Coder> = obj;
 
-    o[component.name] = getCoder(component, options);
+    o[component.name!] = getCoder(component, options);
     return o;
   }, {});
 }
