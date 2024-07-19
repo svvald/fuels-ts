@@ -16,7 +16,7 @@ import { renderFactoryTemplate } from './factory';
  * @group node
  */
 describe('factory.ts', () => {
-  test('should render factory template', () => {
+  test('sshould render factory template', () => {
     const { restore } = mockVersions();
 
     const project = getTypegenForcProject(AbiTypegenProjectsEnum.PREDICATE);

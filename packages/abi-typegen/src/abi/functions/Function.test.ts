@@ -4,7 +4,7 @@ import {
 } from '../../../test/fixtures/forc-projects/index';
 import { parseTypes } from '../../utils/parseTypes';
 
-import { Function } from './Function';
+import { AbiFunction } from './Function';
 
 /**
  * @group node
@@ -21,7 +21,7 @@ describe('Function.ts', () => {
     const [rawAbiFunction] = functions;
     const types = parseTypes({ rawAbiTypes });
 
-    const func = new Function({ rawAbiFunction, types });
+    const func = new AbiFunction({ rawAbiFunction, types });
 
     const expectedDecl = 'main: InvokeFunction<[x: string, y: string], boolean>';
 
@@ -42,7 +42,7 @@ describe('Function.ts', () => {
     const [rawAbiFunction] = functions;
     const types = parseTypes({ rawAbiTypes });
 
-    const func = new Function({ rawAbiFunction, types });
+    const func = new AbiFunction({ rawAbiFunction, types });
 
     expect(func.name).toEqual(rawAbiFunction.name);
     expect(func.attributes.inputs).toEqual('Vec<BigNumberish>');
@@ -58,7 +58,7 @@ describe('Function.ts', () => {
     const [rawAbiFunction] = functions;
     const types = parseTypes({ rawAbiTypes });
 
-    const func = new Function({ rawAbiFunction, types });
+    const func = new AbiFunction({ rawAbiFunction, types });
 
     expect(func.name).toEqual(rawAbiFunction.name);
     expect(func.attributes.inputs).toEqual('Option<BigNumberish>');

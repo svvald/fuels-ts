@@ -5,7 +5,7 @@ import { findType } from '../../utils/findType';
 import { parseTypeArguments } from '../../utils/parseTypeArguments';
 import { EmptyType } from '../types/EmptyType';
 
-export class Function implements IFunction {
+export class AbiFunction implements IFunction {
   public name: string;
   public types: IType[];
   public rawAbiFunction: JsonAbiFunction;
