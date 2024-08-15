@@ -1,5 +1,11 @@
 # @internal/fuel-core
 
+## 0.89.0
+
+### Minor Changes
+
+- 03ac550: feat!: `fuel-core@0.32.1` and large contract deployments
+
 ## 0.88.4
 
 ### Patch Changes
